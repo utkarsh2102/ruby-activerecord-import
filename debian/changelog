@@ -1,0 +1,5 @@
+ruby-activerecord-import (0.6.0-1) UNRELEASED; urgency=medium
+
+  * Initial release (Closes: #702505)
+
+ -- Pirate Praveen <praveen@debian.org>  Tue, 11 Nov 2014 17:06:40 +0530

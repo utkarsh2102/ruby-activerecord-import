@@ -1,0 +1,20 @@
+Source: ruby-activerecord-import
+Section: ruby
+Priority: optional
+Maintainer: Debian Ruby Extras Maintainers <pkg-ruby-extras-maintainers@lists.alioth.debian.org>
+Uploaders: Pirate Praveen <praveen@debian.org>
+Build-Depends: debhelper (>= 7.0.50~), gem2deb
+Standards-Version: 3.9.5
+Vcs-Git: git://anonscm.debian.org/pkg-ruby-extras/ruby-activerecord-import.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-ruby-extras/ruby-activerecord-import.git;a=summary
+Homepage: http://github.com/zdennis/activerecord-import
+Testsuite: autopkgtest
+XS-Ruby-Versions: all
+
+Package: ruby-activerecord-import
+Architecture: all
+XB-Ruby-Versions: ${ruby:Versions}
+Depends: ${shlibs:Depends}, ${misc:Depends}, ruby | ruby-interpreter
+# activerecord (>= 3.0), rake (>= 0, development)
+Description: Bulk-loading extension for ActiveRecord
+ Extraction of the ActiveRecord::Base#import functionality from ar-extensions for Rails 3 and beyond
