@@ -1,5 +1,5 @@
-ruby-activerecord-import (0.6.0-1) UNRELEASED; urgency=medium
+ruby-activerecord-import (0.6.0-1) unstable; urgency=low
 
   * Initial release (Closes: #702505)
 
- -- Pirate Praveen <praveen@debian.org>  Tue, 11 Nov 2014 17:06:40 +0530
+ -- Pirate Praveen <praveen@debian.org>  Tue, 11 Nov 2014 17:29:28 +0530
