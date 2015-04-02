@@ -1,14 +1,14 @@
 --- !ruby/object:Gem::Specification
 name: activerecord-import
 version: !ruby/object:Gem::Version
-  version: 0.6.0
+  version: 0.7.0
 platform: ruby
 authors:
 - Zach Dennis
 autorequire: 
 bindir: bin
 cert_chain: []
-date: 2014-10-08 00:00:00.000000000 Z
+date: 2014-12-22 00:00:00.000000000 Z
 dependencies:
 - !ruby/object:Gem::Dependency
   name: activerecord
@@ -70,6 +70,8 @@ files:
 - gemfiles/3.1.gemfile
 - gemfiles/3.2.gemfile
 - gemfiles/4.0.gemfile
+- gemfiles/4.1.gemfile
+- gemfiles/4.2.gemfile
 - lib/activerecord-import.rb
 - lib/activerecord-import/active_record/adapters/abstract_adapter.rb
 - lib/activerecord-import/active_record/adapters/em_mysql2_adapter.rb
@@ -159,7 +161,7 @@ required_rubygems_version: !ruby/object:Gem::Requirement
       version: '0'
 requirements: []
 rubyforge_project: 
-rubygems_version: 2.2.2
+rubygems_version: 2.4.3
 signing_key: 
 specification_version: 4
 summary: Bulk-loading extension for ActiveRecord
@@ -207,4 +209,3 @@ test_files:
 - test/travis/database.yml
 - test/value_sets_bytes_parser_test.rb
 - test/value_sets_records_parser_test.rb
-has_rdoc: 
