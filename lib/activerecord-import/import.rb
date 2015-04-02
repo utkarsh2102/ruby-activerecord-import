@@ -25,6 +25,71 @@ module ActiveRecord::Import #:nodoc:
   end
 end
 
+class ActiveRecord::Associations::CollectionProxy
+  def import(*args, &block)
+    @association.import(*args, &block)
+  end
+end
+
+class ActiveRecord::Associations::CollectionAssociation
+  def import(*args, &block)
+    unless owner.persisted?
+      raise ActiveRecord::RecordNotSaved, "You cannot call import unless the parent is saved"
+    end
+
+    options = args.last.is_a?(Hash) ? args.pop : {}
+
+    model_klass = self.reflection.klass
+    symbolized_foreign_key = self.reflection.foreign_key.to_sym
+    symbolized_column_names = model_klass.column_names.map(&:to_sym)
+
+    owner_primary_key = self.owner.class.primary_key
+    owner_primary_key_value = self.owner.send(owner_primary_key)
+
+    # assume array of model objects
+    if args.last.is_a?( Array ) and args.last.first.is_a? ActiveRecord::Base
+      if args.length == 2
+        models = args.last
+        column_names = args.first
+      else
+        models = args.first
+        column_names = symbolized_column_names
+      end
+
+      if !symbolized_column_names.include?(symbolized_foreign_key)
+        column_names << symbolized_foreign_key
+      end
+
+      models.each do |m|
+        m.send "#{symbolized_foreign_key}=", owner_primary_key_value
+      end
+
+      return model_klass.import column_names, models, options
+
+    # supports empty array
+    elsif args.last.is_a?( Array ) and args.last.empty?
+      return ActiveRecord::Import::Result.new([], 0) if args.last.empty?
+
+    # supports 2-element array and array
+    elsif args.size == 2 and args.first.is_a?( Array ) and args.last.is_a?( Array )
+      column_names, array_of_attributes = args
+      symbolized_column_names = column_names.map(&:to_s)
+
+      if !symbolized_column_names.include?(symbolized_foreign_key)
+        column_names << symbolized_foreign_key
+        array_of_attributes.each { |attrs| attrs << owner_primary_key_value }
+      else
+        index = symbolized_column_names.index(symbolized_foreign_key)
+        array_of_attributes.each { |attrs| attrs[index] = owner_primary_key_value }
+      end
+
+      return model_klass.import column_names, array_of_attributes, options
+    else
+      raise ArgumentError.new( "Invalid arguments!" )
+    end
+  end
+end
+
 class ActiveRecord::Base
   class << self
 
@@ -120,7 +185,7 @@ class ActiveRecord::Base
     #  # Example using column_names and array_of_values
     #  columns = [ :author_name, :title ]
     #  values = [ [ 'zdennis', 'test post' ], [ 'jdoe', 'another test post' ] ]
-    #  BlogPost.import columns, values 
+    #  BlogPost.import columns, values
     #
     #  # Example using column_names, array_of_value and options
     #  columns = [ :author_name, :title ]
@@ -142,7 +207,7 @@ class ActiveRecord::Base
     #
     # == On Duplicate Key Update (MySQL only)
     #
-    # The :on_duplicate_key_update option can be either an Array or a Hash. 
+    # The :on_duplicate_key_update option can be either an Array or a Hash.
     #
     # ==== Using an Array
     #
@@ -170,6 +235,7 @@ class ActiveRecord::Base
       options.merge!( args.pop ) if args.last.is_a? Hash
 
       is_validating = options.delete( :validate )
+      is_validating = true unless options[:validate_with_context].nil?
 
       # assume array of model objects
       if args.last.is_a?( Array ) and args.last.first.is_a? ActiveRecord::Base
@@ -254,7 +320,7 @@ class ActiveRecord::Base
         instance = new do |model|
           hsh.each_pair{ |k,v| model.send("#{k}=", v) }
         end
-        if not instance.valid?
+        if not instance.valid?(options[:validate_with_context])
           array_of_attributes[ i ] = nil
           failed_instances << instance
         end
@@ -331,11 +397,11 @@ class ActiveRecord::Base
           # be sure to query sequence_name *last*, only if cheaper tests fail, because it's costly
           if val.nil? && column.name == primary_key && !sequence_name.blank?
              connection_memo.next_value_for_sequence(sequence_name)
-          else
-            if serialized_attributes.include?(column.name)
-              connection_memo.quote(serialized_attributes[column.name].dump(val), column)
+          elsif column
+            if column.respond_to?(:type_cast_from_user)                         # Rails 4.2 and higher
+              connection_memo.quote(column.type_cast_from_user(val), column)
             else
-              connection_memo.quote(val, column)
+              connection_memo.quote(column.type_cast(val), column)              # Rails 3.1, 3.2, and 4.1
             end
           end
         end
@@ -347,7 +413,7 @@ class ActiveRecord::Base
       AREXT_RAILS_COLUMNS[:create].each_pair do |key, blk|
         if self.column_names.include?(key)
           value = blk.call
-          if index=column_names.index(key)
+          if index=column_names.index(key) || index=column_names.index(key.to_sym)
             # replace every instance of the array of attributes with our value
             array_of_attributes.each{ |arr| arr[index] = value if arr[index].nil? }
           else
@@ -360,7 +426,7 @@ class ActiveRecord::Base
       AREXT_RAILS_COLUMNS[:update].each_pair do |key, blk|
         if self.column_names.include?(key)
           value = blk.call
-          if index=column_names.index(key)
+          if index=column_names.index(key) || index=column_names.index(key.to_sym)
              # replace every instance of the array of attributes with our value
              array_of_attributes.each{ |arr| arr[index] = value }
           else

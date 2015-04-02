@@ -20,7 +20,9 @@ end
 
 # Support libs
 gem "factory_girl", "~> 4.2.0"
-gem "delorean",     "~> 0.2.0"
+gem "timecop"
+gem "chronic"
+
 
 # Debugging
 platforms :jruby do
@@ -36,5 +38,9 @@ platforms :mri_19 do
 end
 
 version = ENV['AR_VERSION'] || "3.2"
+
+if version > "4.0"
+  gem "minitest"
+end
 
 eval_gemfile File.expand_path("../gemfiles/#{version}.gemfile", __FILE__)
