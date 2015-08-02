@@ -1,6 +1,7 @@
 ruby-activerecord-import (0.8.0-1) UNRELEASED; urgency=medium
 
   * New upstream release
+  * Fix duplicate license name in copyright
 
  -- Pirate Praveen <praveen@debian.org>  Sun, 02 Aug 2015 16:04:27 +0530
 
