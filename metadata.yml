@@ -1,14 +1,14 @@
 --- !ruby/object:Gem::Specification
 name: activerecord-import
 version: !ruby/object:Gem::Version
-  version: 0.7.0
+  version: 0.8.0
 platform: ruby
 authors:
 - Zach Dennis
 autorequire: 
 bindir: bin
 cert_chain: []
-date: 2014-12-22 00:00:00.000000000 Z
+date: 2015-05-18 00:00:00.000000000 Z
 dependencies:
 - !ruby/object:Gem::Dependency
   name: activerecord
@@ -116,6 +116,8 @@ files:
 - test/jdbcmysql/import_test.rb
 - test/jdbcpostgresql/import_test.rb
 - test/models/book.rb
+- test/models/chapter.rb
+- test/models/end_note.rb
 - test/models/group.rb
 - test/models/topic.rb
 - test/models/widget.rb
@@ -184,6 +186,8 @@ test_files:
 - test/jdbcmysql/import_test.rb
 - test/jdbcpostgresql/import_test.rb
 - test/models/book.rb
+- test/models/chapter.rb
+- test/models/end_note.rb
 - test/models/group.rb
 - test/models/topic.rb
 - test/models/widget.rb
@@ -209,3 +213,4 @@ test_files:
 - test/travis/database.yml
 - test/value_sets_bytes_parser_test.rb
 - test/value_sets_records_parser_test.rb
+has_rdoc: 
