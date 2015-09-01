@@ -270,7 +270,7 @@ class ActiveRecord::Base
           # this next line breaks sqlite.so with a segmentation fault
           # if model.new_record? || options[:on_duplicate_key_update]
             column_names.map do |name|
-              model.send( "#{name}_before_type_cast" )
+              model.read_attribute_before_type_cast(name.to_s)
             end
           # end
         end
@@ -377,7 +377,7 @@ class ActiveRecord::Base
       unless scope_columns.blank?
         scope_columns.zip(scope_values).each do |name, value|
           next if column_names.include?(name.to_sym)
-          column_names << name
+          column_names << name.to_sym
           array_of_attributes.each { |attrs| attrs << value }
         end
       end

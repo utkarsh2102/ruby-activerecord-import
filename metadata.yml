@@ -1,14 +1,14 @@
 --- !ruby/object:Gem::Specification
 name: activerecord-import
 version: !ruby/object:Gem::Version
-  version: 0.8.0
+  version: 0.10.0
 platform: ruby
 authors:
 - Zach Dennis
 autorequire: 
 bindir: bin
 cert_chain: []
-date: 2015-05-18 00:00:00.000000000 Z
+date: 2015-07-08 00:00:00.000000000 Z
 dependencies:
 - !ruby/object:Gem::Dependency
   name: activerecord
