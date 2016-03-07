@@ -1,14 +1,14 @@
 --- !ruby/object:Gem::Specification
 name: activerecord-import
 version: !ruby/object:Gem::Version
-  version: 0.10.0
+  version: 0.12.0
 platform: ruby
 authors:
 - Zach Dennis
 autorequire: 
 bindir: bin
 cert_chain: []
-date: 2015-07-08 00:00:00.000000000 Z
+date: 2016-02-26 00:00:00.000000000 Z
 dependencies:
 - !ruby/object:Gem::Dependency
   name: activerecord
@@ -49,6 +49,7 @@ files:
 - ".gitignore"
 - ".travis.yml"
 - Brewfile
+- CHANGELOG.md
 - Gemfile
 - LICENSE
 - README.markdown
@@ -56,11 +57,10 @@ files:
 - activerecord-import.gemspec
 - benchmarks/README
 - benchmarks/benchmark.rb
-- benchmarks/boot.rb
 - benchmarks/lib/base.rb
 - benchmarks/lib/cli_parser.rb
 - benchmarks/lib/float.rb
-- benchmarks/lib/mysql_benchmark.rb
+- benchmarks/lib/mysql2_benchmark.rb
 - benchmarks/lib/output_to_csv.rb
 - benchmarks/lib/output_to_html.rb
 - benchmarks/models/test_innodb.rb
@@ -72,13 +72,12 @@ files:
 - gemfiles/4.0.gemfile
 - gemfiles/4.1.gemfile
 - gemfiles/4.2.gemfile
+- gemfiles/5.0.gemfile
 - lib/activerecord-import.rb
 - lib/activerecord-import/active_record/adapters/abstract_adapter.rb
-- lib/activerecord-import/active_record/adapters/em_mysql2_adapter.rb
 - lib/activerecord-import/active_record/adapters/jdbcmysql_adapter.rb
 - lib/activerecord-import/active_record/adapters/jdbcpostgresql_adapter.rb
 - lib/activerecord-import/active_record/adapters/mysql2_adapter.rb
-- lib/activerecord-import/active_record/adapters/mysql_adapter.rb
 - lib/activerecord-import/active_record/adapters/postgresql_adapter.rb
 - lib/activerecord-import/active_record/adapters/seamless_database_pool_adapter.rb
 - lib/activerecord-import/active_record/adapters/sqlite3_adapter.rb
@@ -89,29 +88,23 @@ files:
 - lib/activerecord-import/adapters/postgresql_adapter.rb
 - lib/activerecord-import/adapters/sqlite3_adapter.rb
 - lib/activerecord-import/base.rb
-- lib/activerecord-import/em_mysql2.rb
 - lib/activerecord-import/import.rb
-- lib/activerecord-import/mysql.rb
 - lib/activerecord-import/mysql2.rb
 - lib/activerecord-import/postgresql.rb
 - lib/activerecord-import/sqlite3.rb
 - lib/activerecord-import/synchronize.rb
 - lib/activerecord-import/value_sets_parser.rb
 - lib/activerecord-import/version.rb
-- test/adapters/em_mysql2.rb
 - test/adapters/jdbcmysql.rb
 - test/adapters/jdbcpostgresql.rb
-- test/adapters/mysql.rb
 - test/adapters/mysql2.rb
 - test/adapters/mysql2spatial.rb
-- test/adapters/mysqlspatial.rb
 - test/adapters/postgis.rb
 - test/adapters/postgresql.rb
 - test/adapters/seamless_database_pool.rb
 - test/adapters/spatialite.rb
 - test/adapters/sqlite3.rb
 - test/database.yml.sample
-- test/em_mysql2/import_test.rb
 - test/import_test.rb
 - test/jdbcmysql/import_test.rb
 - test/jdbcpostgresql/import_test.rb
@@ -119,11 +112,12 @@ files:
 - test/models/chapter.rb
 - test/models/end_note.rb
 - test/models/group.rb
+- test/models/promotion.rb
+- test/models/question.rb
+- test/models/rule.rb
 - test/models/topic.rb
 - test/models/widget.rb
-- test/mysql/import_test.rb
 - test/mysql2/import_test.rb
-- test/mysqlspatial/import_test.rb
 - test/mysqlspatial2/import_test.rb
 - test/postgis/import_test.rb
 - test/postgresql/import_test.rb
@@ -132,11 +126,12 @@ files:
 - test/schema/version.rb
 - test/sqlite3/import_test.rb
 - test/support/active_support/test_case_extensions.rb
+- test/support/assertions.rb
 - test/support/factories.rb
 - test/support/generate.rb
-- test/support/mysql/assertions.rb
 - test/support/mysql/import_examples.rb
 - test/support/postgresql/import_examples.rb
+- test/support/shared_examples/on_duplicate_key_update.rb
 - test/synchronize_test.rb
 - test/test_helper.rb
 - test/travis/build.sh
@@ -163,25 +158,21 @@ required_rubygems_version: !ruby/object:Gem::Requirement
       version: '0'
 requirements: []
 rubyforge_project: 
-rubygems_version: 2.4.3
+rubygems_version: 2.4.5.1
 signing_key: 
 specification_version: 4
 summary: Bulk-loading extension for ActiveRecord
 test_files:
-- test/adapters/em_mysql2.rb
 - test/adapters/jdbcmysql.rb
 - test/adapters/jdbcpostgresql.rb
-- test/adapters/mysql.rb
 - test/adapters/mysql2.rb
 - test/adapters/mysql2spatial.rb
-- test/adapters/mysqlspatial.rb
 - test/adapters/postgis.rb
 - test/adapters/postgresql.rb
 - test/adapters/seamless_database_pool.rb
 - test/adapters/spatialite.rb
 - test/adapters/sqlite3.rb
 - test/database.yml.sample
-- test/em_mysql2/import_test.rb
 - test/import_test.rb
 - test/jdbcmysql/import_test.rb
 - test/jdbcpostgresql/import_test.rb
@@ -189,11 +180,12 @@ test_files:
 - test/models/chapter.rb
 - test/models/end_note.rb
 - test/models/group.rb
+- test/models/promotion.rb
+- test/models/question.rb
+- test/models/rule.rb
 - test/models/topic.rb
 - test/models/widget.rb
-- test/mysql/import_test.rb
 - test/mysql2/import_test.rb
-- test/mysqlspatial/import_test.rb
 - test/mysqlspatial2/import_test.rb
 - test/postgis/import_test.rb
 - test/postgresql/import_test.rb
@@ -202,15 +194,15 @@ test_files:
 - test/schema/version.rb
 - test/sqlite3/import_test.rb
 - test/support/active_support/test_case_extensions.rb
+- test/support/assertions.rb
 - test/support/factories.rb
 - test/support/generate.rb
-- test/support/mysql/assertions.rb
 - test/support/mysql/import_examples.rb
 - test/support/postgresql/import_examples.rb
+- test/support/shared_examples/on_duplicate_key_update.rb
 - test/synchronize_test.rb
 - test/test_helper.rb
 - test/travis/build.sh
 - test/travis/database.yml
 - test/value_sets_bytes_parser_test.rb
 - test/value_sets_records_parser_test.rb
-has_rdoc: 

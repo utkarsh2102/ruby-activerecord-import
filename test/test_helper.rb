@@ -10,6 +10,8 @@ ENV["RAILS_ENV"] = "test"
 require "bundler"
 Bundler.setup
 
+require 'pry' unless RbConfig::CONFIG["RUBY_INSTALL_NAME"] =~ /jruby/
+
 require "active_record"
 require "active_record/fixtures"
 require "active_support/test_case"
@@ -34,7 +36,7 @@ ActiveRecord::Base.configurations["test"] = YAML.load_file(test_dir.join("databa
 ActiveRecord::Base.default_timezone = :utc
 
 require "activerecord-import"
-ActiveRecord::Base.establish_connection "test"
+ActiveRecord::Base.establish_connection :test
 
 ActiveSupport::Notifications.subscribe(/active_record.sql/) do |event, _, _, _, hsh|
   ActiveRecord::Base.logger.info hsh[:sql]
@@ -53,3 +55,7 @@ Dir[File.dirname(__FILE__) + "/models/*.rb"].each{ |file| require file }
 
 # Prevent this deprecation warning from breaking the tests.
 Rake::FileList.send(:remove_method, :import)
+
+if ENV['AR_VERSION'].to_f >= 4.2
+  ActiveSupport::TestCase.test_order = :sorted
+end

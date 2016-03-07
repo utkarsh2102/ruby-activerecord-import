@@ -19,6 +19,22 @@ describe "#import" do
     end
   end
 
+  describe "argument safety" do
+    it "should not modify the passed in columns array" do
+      assert_nothing_raised do
+        columns = %w(title author_name).freeze
+        Topic.import columns, [["foo", "bar"]]
+      end
+    end
+
+    it "should not modify the passed in values array" do
+      assert_nothing_raised do
+        values = [["foo", "bar"]].freeze
+        Topic.import %w(title author_name), values
+      end
+    end
+  end
+
   describe "with non-default ActiveRecord models" do
     context "that have a non-standard primary key (that is no sequence)" do
       it "should import models successfully" do
@@ -139,7 +155,11 @@ describe "#import" do
 
       it "doesn't reload any data (doesn't work)" do
         Topic.import new_topics, :synchronize => new_topics
-        assert new_topics.all?(&:new_record?), "No record should have been reloaded"
+        if Topic.support_setting_primary_key_of_imported_objects?
+          assert new_topics.all?(&:persisted?), "Records should have been reloaded"
+        else
+          assert new_topics.all?(&:new_record?), "No record should have been reloaded"
+        end
       end
     end
 
@@ -374,11 +394,17 @@ describe "#import" do
       ]
       Book.import books
       assert_equal 2, Book.count
-      assert_equal 0, Book.first.read_attribute('status')
-      assert_equal 1, Book.last.read_attribute('status')
+
+      if ENV['AR_VERSION'].to_i >= 5.0
+        assert_equal 'draft', Book.first.read_attribute('status')
+        assert_equal 'published', Book.last.read_attribute('status')
+      else
+        assert_equal 0, Book.first.read_attribute('status')
+        assert_equal 1, Book.last.read_attribute('status')
+      end
     end
 
-    if ENV['AR_VERSION'].to_i > 4.1
+    if ENV['AR_VERSION'].to_f > 4.1
       it 'should be able to import enum fields by name' do
         Book.delete_all if Book.count > 0
         books = [
@@ -387,8 +413,14 @@ describe "#import" do
         ]
         Book.import books
         assert_equal 2, Book.count
-        assert_equal 0, Book.first.read_attribute('status')
-        assert_equal 1, Book.last.read_attribute('status')
+
+        if ENV['AR_VERSION'].to_i >= 5.0
+          assert_equal 'draft', Book.first.read_attribute('status')
+          assert_equal 'published', Book.last.read_attribute('status')
+        else
+          assert_equal 0, Book.first.read_attribute('status')
+          assert_equal 1, Book.last.read_attribute('status')
+        end
       end
     end
   end
@@ -418,6 +450,15 @@ describe "#import" do
         Widget.import [:w_id, :data], [[1, {:a => :b}]]
       end
       assert_equal({:a => :b}, Widget.find_by_w_id(1).data)
+    end
+
+    requires_active_record_version ">= 4" do
+      it "imports values for serialized JSON fields" do
+        assert_difference "Widget.unscoped.count", +1 do
+          Widget.import [:w_id, :json_data], [[9, {:a => :b}]]
+        end
+        assert_equal({:a => :b}.as_json, Widget.find_by_w_id(9).json_data)
+      end
     end
   end
 end
