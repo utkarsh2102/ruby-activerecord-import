@@ -7,7 +7,7 @@ ActiveRecord::Schema.define do
 
   create_table :group, :force => true do |t|
     t.column :order, :string
-    t.timestamps
+    t.timestamps null: true
   end
 
   create_table :topics, :force=>true do |t|
@@ -64,7 +64,7 @@ ActiveRecord::Schema.define do
     t.column :publish_date, :date
     t.column :topic_id, :integer
     t.column :for_sale, :boolean, :default => true
-    t.column :status, :integer
+    t.column :status, :integer, :default => 0
   end
 
   create_table :chapters, :force => true do |t|
@@ -116,5 +116,23 @@ ActiveRecord::Schema.define do
     t.integer :w_id
     t.boolean :active, :default => false
     t.text    :data
+    t.text    :json_data
+  end
+
+  create_table "promotions", primary_key: "promotion_id", force: :cascade do |t|
+    t.string   :code
+    t.string   :description
+    t.decimal  :discount
+  end
+
+  add_index :promotions, [:code], :unique => true, :name => 'uk_code'
+
+  create_table :rules, force: true do |t|
+    t.column :condition_text, :string
+    t.column :question_id, :integer
+  end
+
+  create_table :questions, force: true do |t|
+    t.column :body, :string
   end
 end

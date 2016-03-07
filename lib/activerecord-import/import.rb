@@ -116,7 +116,7 @@ class ActiveRecord::Base
     # supports on duplicate key update functionality, otherwise
     # returns false.
     def supports_on_duplicate_key_update?
-      connection.respond_to?(:supports_on_duplicate_key_update?) && connection.supports_on_duplicate_key_update?
+      connection.supports_on_duplicate_key_update?
     end
 
     # returns true if the current database connection adapter
@@ -165,19 +165,23 @@ class ActiveRecord::Base
     # below for what +options+ are available.
     #
     # == Options
-    # * +validate+ - true|false, tells import whether or not to use \
+    # * +validate+ - true|false, tells import whether or not to use
     #    ActiveRecord validations. Validations are enforced by default.
-    # * +on_duplicate_key_update+ - an Array or Hash, tells import to \
-    #    use MySQL's ON DUPLICATE KEY UPDATE ability. See On Duplicate\
-    #    Key Update below.
+    # * +ignore+ - true|false, tells import to use MySQL's INSERT IGNORE
+    #    to discard records that contain duplicate keys.
+    # * +on_duplicate_key_ignore+ - true|false, tells import to use
+    #    Postgres 9.5+ ON CONFLICT DO NOTHING.
+    # * +on_duplicate_key_update+ - an Array or Hash, tells import to
+    #    use MySQL's ON DUPLICATE KEY UPDATE or Postgres 9.5+ ON CONFLICT
+    #    DO UPDATE ability. See On Duplicate Key Update below.
     # * +synchronize+ - an array of ActiveRecord instances for the model
     #   that you are currently importing data into. This synchronizes
     #   existing model instances in memory with updates from the import.
-    # * +timestamps+ - true|false, tells import to not add timestamps \
+    # * +timestamps+ - true|false, tells import to not add timestamps
     #   (if false) even if record timestamps is disabled in ActiveRecord::Base
-    # * +recursive - true|false, tells import to import all autosave association
-    #   if the adapter supports setting the primary keys of the newly imported
-    #   objects.
+    # * +recursive - true|false, tells import to import all has_many/has_one
+    #   associations if the adapter supports setting the primary keys of the
+    #   newly imported objects.
     #
     # == Examples
     #  class BlogPost < ActiveRecord::Base ; end
@@ -211,7 +215,7 @@ class ActiveRecord::Base
     #  BlogPost.import posts, :synchronize => posts, :synchronize_keys => [:title]
     #  puts posts.first.persisted? # => true
     #
-    # == On Duplicate Key Update (MySQL only)
+    # == On Duplicate Key Update (MySQL)
     #
     # The :on_duplicate_key_update option can be either an Array or a Hash.
     #
@@ -225,18 +229,78 @@ class ActiveRecord::Base
     #
     # ====  Using A Hash
     #
-    # The :on_duplicate_key_update option can be a hash of column name
+    # The :on_duplicate_key_update option can be a hash of column names
     # to model attribute name mappings. This gives you finer grained
     # control over what fields are updated with what attributes on your
     # model. Below is an example:
     #
     #   BlogPost.import columns, attributes, :on_duplicate_key_update=>{ :title => :title }
     #
+    # == On Duplicate Key Update (Postgres 9.5+)
+    #
+    # The :on_duplicate_key_update option can be an Array or a Hash with up to
+    # two attributes, :conflict_target or :constraint_name and :columns.
+    #
+    # ==== Using an Array
+    #
+    # The :on_duplicate_key_update option can be an array of column
+    # names. This option only handles inserts that conflict with the
+    # primary key. If a table does not have a primary key, this will
+    # not work. The column names are the only fields that are updated
+    # if a duplicate record is found. Below is an example:
+    #
+    #   BlogPost.import columns, values, :on_duplicate_key_update=>[ :date_modified, :content, :author ]
+    #
+    # ====  Using a Hash
+    #
+    # The :on_duplicate_update option can be a hash with up to two attributes,
+    # :conflict_target or constraint_name, and :columns. Unlike MySQL, Postgres
+    # requires the conflicting constraint to be explicitly specified. Using this
+    # option allows you to specify a constraint other than the primary key.
+    #
+    # ====== :conflict_target
+    #
+    # The :conflict_target attribute specifies the columns that make up the
+    # conflicting unique constraint and can be a single column or an array of
+    # column names. This attribute is ignored if :constraint_name is included,
+    # but it is the preferred method of identifying a constraint. It will
+    # default to the primary key. Below is an example:
+    #
+    #   BlogPost.import columns, values, :on_duplicate_key_update=>{ :conflict_target => [:author_id, :slug], :columns => [ :date_modified ] }
+    #
+    # ====== :constraint_name
+    #
+    # The :constraint_name attribute explicitly identifies the conflicting
+    # unique index by name. Postgres documentation discourages using this method
+    # of identifying an index unless absolutely necessary. Below is an example:
+    #
+    #   BlogPost.import columns, values, :on_duplicate_key_update=>{ :constraint_name => :blog_posts_pkey, :columns => [ :date_modified ] }
+    #
+    # ====== :columns
+    #
+    # The :columns attribute can be either an Array or a Hash.
+    #
+    # ======== Using an Array
+    #
+    # The :columns attribute can be an array of column names. The column names
+    # are the only fields that are updated if a duplicate record is found.
+    # Below is an example:
+    #
+    #   BlogPost.import columns, values, :on_duplicate_key_update=>{ :conflict_target => :slug, :columns => [ :date_modified, :content, :author ] }
+    #
+    # ========  Using a Hash
+    #
+    # The :columns option can be a hash of column names to model attribute name
+    # mappings. This gives you finer grained control over what fields are updated
+    # with what attributes on your model. Below is an example:
+    #
+    #   BlogPost.import columns, attributes, :on_duplicate_key_update=>{ :conflict_target => :slug, :columns => { :title => :title } }
+    #
     # = Returns
     # This returns an object which responds to +failed_instances+ and +num_inserts+.
     # * failed_instances - an array of objects that fails validation and were not committed to the database. An empty array if no validation is performed.
     # * num_inserts - the number of insert statements it took to import the data
-    # * ids - the priamry keys of the imported ids, if the adpater supports it, otherwise and empty array.
+    # * ids - the primary keys of the imported ids, if the adpater supports it, otherwise and empty array.
     def import(*args)
       if args.first.is_a?( Array ) and args.first.first.is_a? ActiveRecord::Base
         options = {}
@@ -252,6 +316,11 @@ class ActiveRecord::Base
     def import_helper( *args )
       options = { :validate=>true, :timestamps=>true, :primary_key=>primary_key }
       options.merge!( args.pop ) if args.last.is_a? Hash
+
+      # Don't modify incoming arguments
+      if options[:on_duplicate_key_update]
+        options[:on_duplicate_key_update] = options[:on_duplicate_key_update].dup
+      end
 
       is_validating = options[:validate]
       is_validating = true unless options[:validate_with_context].nil?
@@ -270,7 +339,14 @@ class ActiveRecord::Base
           # this next line breaks sqlite.so with a segmentation fault
           # if model.new_record? || options[:on_duplicate_key_update]
             column_names.map do |name|
-              model.read_attribute_before_type_cast(name.to_s)
+              name = name.to_s
+              if respond_to?(:defined_enums) && defined_enums.has_key?(name) # ActiveRecord 5
+                model.read_attribute(name)
+              elsif model.class.column_defaults[name].is_a?(Integer)
+                model.read_attribute(name)
+              else
+                model.read_attribute_before_type_cast(name)
+              end
             end
           # end
         end
@@ -285,6 +361,7 @@ class ActiveRecord::Base
       end
 
       # dup the passed in array so we don't modify it unintentionally
+      column_names = column_names.dup
       array_of_attributes = array_of_attributes.dup
 
       # Force the primary key col into the insert if it's not
@@ -349,6 +426,7 @@ class ActiveRecord::Base
         instance = new do |model|
           hsh.each_pair{ |k,v| model.send("#{k}=", v) }
         end
+
         if not instance.valid?(options[:validate_with_context])
           array_of_attributes[ i ] = nil
           failed_instances << instance
@@ -376,8 +454,13 @@ class ActiveRecord::Base
 
       unless scope_columns.blank?
         scope_columns.zip(scope_values).each do |name, value|
-          next if column_names.include?(name.to_sym)
-          column_names << name.to_sym
+          name_as_sym = name.to_sym
+          next if column_names.include?(name_as_sym)
+
+          is_sti = (name_as_sym == inheritance_column.to_sym && self < base_class)
+          value = value.first if is_sti
+
+          column_names << name_as_sym
           array_of_attributes.each { |attrs| attrs << value }
         end
       end
@@ -417,8 +500,14 @@ class ActiveRecord::Base
     def set_ids_and_mark_clean(models, import_result)
       unless models.nil?
         import_result.ids.each_with_index do |id, index|
-          models[index].id = id.to_i
-          models[index].instance_variable_get(:@changed_attributes).clear # mark the model as saved
+          model = models[index]
+          model.id = id.to_i
+          if model.respond_to?(:clear_changes_information) # Rails 4.0 and higher
+            model.clear_changes_information
+          else  # Rails 3.1
+            model.instance_variable_get(:@changed_attributes).clear
+          end
+          model.instance_variable_set(:@new_record, false)
         end
       end
     end
@@ -427,7 +516,6 @@ class ActiveRecord::Base
       # now, for all the dirty associations, collect them into a new set of models, then recurse.
       # notes:
       #    does not handle associations that reference themselves
-      #    assumes that the only associations to be saved are marked with :autosave
       #    should probably take a hash to associations to follow.
       associated_objects_by_class={}
       models.each {|model| find_associated_objects_for_import(associated_objects_by_class, model) }
@@ -444,11 +532,17 @@ class ActiveRecord::Base
     def find_associated_objects_for_import(associated_objects_by_class, model)
       associated_objects_by_class[model.class.name]||={}
 
-      model.class.reflect_on_all_autosave_associations.each do |association_reflection|
+      association_reflections =
+        model.class.reflect_on_all_associations(:has_one) +
+        model.class.reflect_on_all_associations(:has_many)
+      association_reflections.each do |association_reflection|
         associated_objects_by_class[model.class.name][association_reflection.name]||=[]
 
         association = model.association(association_reflection.name)
         association.loaded!
+
+        # Wrap target in an array if not already
+        association = Array(association.target)
 
         changed_objects = association.select {|a| a.new_record? || a.changed?}
         changed_objects.each do |child|
@@ -473,10 +567,12 @@ class ActiveRecord::Base
           if val.nil? && column.name == primary_key && !sequence_name.blank?
              connection_memo.next_value_for_sequence(sequence_name)
           elsif column
-            if column.respond_to?(:type_cast_from_user)                         # Rails 4.2 and higher
+            if respond_to?(:type_caster) && type_caster.respond_to?(:type_cast_for_database) # Rails 5.0 and higher
+              connection_memo.quote(type_caster.type_cast_for_database(column.name, val))
+            elsif column.respond_to?(:type_cast_from_user)                      # Rails 4.2 and higher
               connection_memo.quote(column.type_cast_from_user(val), column)
-            else
-              connection_memo.quote(column.type_cast(val), column)              # Rails 3.1, 3.2, and 4.1
+            else                                                                # Rails 3.1, 3.2, and 4.1
+              connection_memo.quote(column.type_cast(val), column)
             end
           end
         end
@@ -510,12 +606,7 @@ class ActiveRecord::Base
           end
 
           if supports_on_duplicate_key_update?
-            if options[:on_duplicate_key_update]
-              options[:on_duplicate_key_update] << key.to_sym if options[:on_duplicate_key_update].is_a?(Array) && !options[:on_duplicate_key_update].include?(key.to_sym)
-              options[:on_duplicate_key_update][key.to_sym] = key.to_sym if options[:on_duplicate_key_update].is_a?(Hash)
-            else
-              options[:on_duplicate_key_update] = [ key.to_sym ]
-            end
+            connection.add_column_for_on_duplicate_key_update(key, options)
           end
         end
       end
