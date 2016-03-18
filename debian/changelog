@@ -1,3 +1,20 @@
+ruby-activerecord-import (0.12.0-1) UNRELEASED; urgency=medium
+
+  [ Cédric Boutillier ]
+  * Bump debhelper compatibility level to 9
+  * Remove version in the gem2deb build-dependency
+  * Use https:// in Vcs-* fields
+  * Use https:// in Vcs-* fields
+  * Bump Standards-Version to 3.9.7 (no changes needed)
+  * Run wrap-and-sort on packaging files
+
+  [ Abhijith PA ]
+  * Imported Upstream version 0.12.0
+
+  [ Balasankar C ]
+
+ -- Cédric Boutillier <boutil@moszumanska.debian.org>  Fri, 18 Mar 2016 20:27:32 +0530
+
 ruby-activerecord-import (0.10.0-1) unstable; urgency=medium
 
   * New upstream release 
