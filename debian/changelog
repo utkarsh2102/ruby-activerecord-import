@@ -1,4 +1,4 @@
-ruby-activerecord-import (0.12.0-1) UNRELEASED; urgency=medium
+ruby-activerecord-import (0.12.0-1) unstable; urgency=medium
 
   [ Cédric Boutillier ]
   * Bump debhelper compatibility level to 9
@@ -12,8 +12,10 @@ ruby-activerecord-import (0.12.0-1) UNRELEASED; urgency=medium
   * Imported Upstream version 0.12.0
 
   [ Balasankar C ]
+  * Add patch to relax mysql and factory_girl version requirements.
+  * Add ruby-seamless-database-pool to Depends.
 
- -- Cédric Boutillier <boutil@moszumanska.debian.org>  Fri, 18 Mar 2016 20:27:32 +0530
+ -- Balasankar C <balasankarc@autistici.org>  Wed, 06 Apr 2016 20:27:32 +0530
 
 ruby-activerecord-import (0.10.0-1) unstable; urgency=medium
 
