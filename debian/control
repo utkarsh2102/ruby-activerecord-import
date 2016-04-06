@@ -16,7 +16,7 @@ Architecture: all
 XB-Ruby-Versions: ${ruby:Versions}
 Depends: ruby | ruby-interpreter,
          ruby-activerecord (>= 3.0),
-         ruby-seamless-database-pool
+         ruby-seamless-database-pool,
          ${misc:Depends},
          ${shlibs:Depends}
 Description: Bulk-loading extension for ActiveRecord
