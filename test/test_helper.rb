@@ -10,7 +10,7 @@ ENV["RAILS_ENV"] = "test"
 require "bundler"
 Bundler.setup
 
-require 'pry' unless RbConfig::CONFIG["RUBY_INSTALL_NAME"] =~ /jruby/
+require 'pry'
 
 require "active_record"
 require "active_record/fixtures"
@@ -55,7 +55,3 @@ Dir[File.dirname(__FILE__) + "/models/*.rb"].each{ |file| require file }
 
 # Prevent this deprecation warning from breaking the tests.
 Rake::FileList.send(:remove_method, :import)
-
-if ENV['AR_VERSION'].to_f >= 4.2
-  ActiveSupport::TestCase.test_order = :sorted
-end

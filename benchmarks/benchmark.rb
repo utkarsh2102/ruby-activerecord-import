@@ -4,8 +4,6 @@ require "active_record"
 
 benchmark_dir = File.dirname(__FILE__)
 
-$LOAD_PATH.unshift('.')
-
 # Get the gem into the load path
 $LOAD_PATH.unshift(File.join(benchmark_dir, '..', 'lib'))
 
@@ -66,3 +64,4 @@ end
 
 puts
 puts "Done with benchmark!"
+
