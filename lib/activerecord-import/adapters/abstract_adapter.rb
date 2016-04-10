@@ -44,13 +44,8 @@ module ActiveRecord::Import::AbstractAdapter
     # Returns an array of post SQL statements given the passed in options.
     def post_sql_statements( table_name, options ) # :nodoc:
       post_sql_statements = []
-
-      if supports_on_duplicate_key_update?
-        if options[:on_duplicate_key_ignore] && respond_to?(:sql_for_on_duplicate_key_ignore)
-          post_sql_statements << sql_for_on_duplicate_key_ignore( table_name, options[:on_duplicate_key_ignore] )
-        elsif options[:on_duplicate_key_update]
-          post_sql_statements << sql_for_on_duplicate_key_update( table_name, options[:on_duplicate_key_update] )
-        end
+      if options[:on_duplicate_key_update]
+        post_sql_statements << sql_for_on_duplicate_key_update( table_name, options[:on_duplicate_key_update] )
       end
 
       #custom user post_sql
@@ -66,10 +61,6 @@ module ActiveRecord::Import::AbstractAdapter
     # in a single packet
     def max_allowed_packet
       NO_MAX_PACKET
-    end
-
-    def supports_on_duplicate_key_update?
-      false
     end
   end
 end
