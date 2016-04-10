@@ -8,14 +8,11 @@ ruby-activerecord-import (0.11.0-1) unstable; urgency=medium
   * Bump Standards-Version to 3.9.7 (no changes needed)
   * Run wrap-and-sort on packaging files
 
-  [ Abhijith PA ]
-  * Imported Upstream version 0.12.0
-
   [ Balasankar C ]
   * Add patch to relax mysql and factory_girl version requirements.
   * Add ruby-seamless-database-pool to Depends.
 
- -- Balasankar C <balasankarc@autistici.org>  Wed, 06 Apr 2016 20:27:32 +0530
+ -- Pirate Praveen <praveen@debian.org>  Sun, 10 Apr 2016 15:24:52 +0530
 
 ruby-activerecord-import (0.10.0-1) unstable; urgency=medium
 
