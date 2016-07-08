@@ -1,6 +1,7 @@
 ruby-activerecord-import (0.11.0-2) unstable; urgency=medium
 
-  * Reupload to unstable 
+  * Reupload to unstable
+  * Check gemspec dependencies on build
 
  -- Pirate Praveen <praveen@debian.org>  Fri, 08 Jul 2016 23:04:36 +0530
 
