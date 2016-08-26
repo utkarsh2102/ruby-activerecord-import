@@ -4,11 +4,13 @@ require "active_record"
 
 benchmark_dir = File.dirname(__FILE__)
 
+$LOAD_PATH.unshift('.')
+
 # Get the gem into the load path
 $LOAD_PATH.unshift(File.join(benchmark_dir, '..', 'lib'))
 
 # Load the benchmark files
-Dir[File.join( benchmark_dir, 'lib', '*.rb' ) ].sort.each{ |f| require f }
+Dir[File.join( benchmark_dir, 'lib', '*.rb' )].sort.each { |f| require f }
 
 # Parse the options passed in via the command line
 options = BenchmarkOptionParser.parse( ARGV )
@@ -22,7 +24,7 @@ ActiveRecord::Base.default_timezone = :utc
 require "activerecord-import"
 ActiveRecord::Base.establish_connection(:test)
 
-ActiveSupport::Notifications.subscribe(/active_record.sql/) do |event, _, _, _, hsh|
+ActiveSupport::Notifications.subscribe(/active_record.sql/) do |_, _, _, _, hsh|
   ActiveRecord::Base.logger.info hsh[:sql]
 end
 
@@ -30,18 +32,17 @@ end
 require File.join(benchmark_dir, "../test/schema/version")
 require File.join(benchmark_dir, "../test/schema/generic_schema")
 adapter_schema = File.join(benchmark_dir, "schema/#{options.adapter}_schema.rb")
-require adapter_schema if File.exists?(adapter_schema)
+require adapter_schema if File.exist?(adapter_schema)
 
-Dir[File.dirname(__FILE__) + "/models/*.rb"].each{ |file| require file }
-
+Dir[File.dirname(__FILE__) + "/models/*.rb"].each { |file| require file }
 
 require File.join( benchmark_dir, 'lib', "#{options.adapter}_benchmark" )
 
 table_types = nil
-if options.benchmark_all_types
-  table_types = [ "all" ]
+table_types = if options.benchmark_all_types
+  ["all"]
 else
-  table_types = options.table_types.keys
+  options.table_types.keys
 end
 
 letter = options.adapter[0].chr
@@ -64,4 +65,3 @@ end
 
 puts
 puts "Done with benchmark!"
-

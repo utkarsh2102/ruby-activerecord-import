@@ -11,9 +11,9 @@ namespace :display do
     puts
   end
 end
-task :default => ["display:notice"]
+task default: ["display:notice"]
 
-ADAPTERS = %w(mysql mysql2 em_mysql2 jdbcmysql jdbcpostgresql postgresql sqlite3 seamless_database_pool mysqlspatial mysql2spatial spatialite postgis)
+ADAPTERS = %w(mysql2 jdbcmysql jdbcpostgresql postgresql sqlite3 seamless_database_pool mysql2spatial spatialite postgis).freeze
 ADAPTERS.each do |adapter|
   namespace :test do
     desc "Runs #{adapter} database tests."
@@ -49,3 +49,6 @@ Rake::RDocTask.new do |rdoc|
   rdoc.rdoc_files.include('README*')
   rdoc.rdoc_files.include('lib/**/*.rb')
 end
+
+require 'rubocop/rake_task'
+RuboCop::RakeTask.new
