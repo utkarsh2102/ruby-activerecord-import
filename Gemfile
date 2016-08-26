@@ -2,7 +2,9 @@ source 'https://rubygems.org'
 
 gemspec
 
-gem "pry-byebug"
+group :development, :test do
+  gem 'rubocop', '~> 0.38.0'
+end
 
 # Database Adapters
 platforms :ruby do
@@ -24,7 +26,6 @@ gem "factory_girl", "~> 4.2.0"
 gem "timecop"
 gem "chronic"
 
-
 # Debugging
 platforms :jruby do
   gem "ruby-debug-base", "= 0.10.4"
@@ -38,9 +39,13 @@ platforms :mri_19 do
   gem "debugger"
 end
 
+platforms :ruby do
+  gem "pry-byebug"
+end
+
 version = ENV['AR_VERSION'] || "4.2"
 
-if version > "4.0"
+if version >= "4.0"
   gem "minitest"
 else
   gem "test-unit"
