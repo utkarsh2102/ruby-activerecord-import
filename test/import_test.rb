@@ -29,7 +29,8 @@ describe "#import" do
 
     it "should not modify the passed in values array" do
       assert_nothing_raised do
-        values = [%w(foo bar)].freeze
+        record = %w(foo bar).freeze
+        values = [record].freeze
         Topic.import %w(title author_name), values
       end
     end
@@ -363,36 +364,30 @@ describe "#import" do
   end
 
   context "importing through an association scope" do
-    [true, false].each do |bool|
-      context "when validation is " + (bool ? "enabled" : "disabled") do
-        it "should automatically set the foreign key column" do
-          books = [["David Chelimsky", "The RSpec Book"], ["Chad Fowler", "Rails Recipes"]]
-          topic = FactoryGirl.create :topic
-          topic.books.import [:author_name, :title], books, validate: bool
-          assert_equal 2, topic.books.count
-          assert topic.books.all? { |book| book.topic_id == topic.id }
+    { has_many: :chapters, polymorphic: :discounts }.each do |association_type, association|
+      let(:book)   { FactoryGirl.create :book }
+      let(:scope)  { book.public_send association }
+      let(:klass)  { { chapters: Chapter, discounts: Discount }[association] }
+      let(:column) { { chapters: :title,  discounts: :amount  }[association] }
+      let(:val1)   { { chapters: 'A',     discounts: 5        }[association] }
+      let(:val2)   { { chapters: 'B',     discounts: 6        }[association] }
+
+      context "for #{association_type}" do
+        it "works importing models" do
+          scope.import [
+            klass.new(column => val1),
+            klass.new(column => val2)
+          ]
+
+          assert_equal [val1, val2], scope.map(&column).sort
+        end
+
+        it "works importing array of columns and values" do
+          scope.import [column], [[val1], [val2]]
+
+          assert_equal [val1, val2], scope.map(&column).sort
         end
       end
-    end
-
-    it "works importing models" do
-      topic = FactoryGirl.create :topic
-      books = [
-        Book.new(author_name: "Author #1", title: "Book #1"),
-        Book.new(author_name: "Author #2", title: "Book #2"),
-      ]
-      topic.books.import books
-      assert_equal 2, topic.books.count
-      assert topic.books.detect { |b| b.title == "Book #1" && b.author_name == "Author #1" }
-      assert topic.books.detect { |b| b.title == "Book #2" && b.author_name == "Author #2" }
-    end
-
-    it "works importing array of columns and values" do
-      topic = FactoryGirl.create :topic
-      topic.books.import [:author_name, :title], [["Author #1", "Book #1"], ["Author #2", "Book #2"]]
-      assert_equal 2, topic.books.count
-      assert topic.books.detect { |b| b.title == "Book #1" && b.author_name == "Author #1" }
-      assert topic.books.detect { |b| b.title == "Book #2" && b.author_name == "Author #2" }
     end
   end
 
@@ -447,6 +442,25 @@ describe "#import" do
           assert_equal 0, Book.first.read_attribute('status')
           assert_equal 1, Book.last.read_attribute('status')
         end
+      end
+    end
+  end
+
+  context 'When importing arrays of values with Enum fields' do
+    let(:columns) { [:author_name, :title, :status] }
+    let(:values) { [['Author #1', 'Book #1', 0], ['Author #2', 'Book #2', 1]] }
+
+    it 'should be able to import enum fields' do
+      Book.delete_all if Book.count > 0
+      Book.import columns, values
+      assert_equal 2, Book.count
+
+      if ENV['AR_VERSION'].to_i >= 5.0
+        assert_equal 'draft', Book.first.read_attribute('status')
+        assert_equal 'published', Book.last.read_attribute('status')
+      else
+        assert_equal 0, Book.first.read_attribute('status')
+        assert_equal 1, Book.last.read_attribute('status')
       end
     end
   end
