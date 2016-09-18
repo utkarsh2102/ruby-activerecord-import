@@ -1,8 +1,8 @@
-ruby-activerecord-import (0.15.0-1) UNRELEASED; urgency=medium
+ruby-activerecord-import (0.15.0-1) experimental; urgency=medium
 
   * New upstream release 
 
- -- Pirate Praveen <praveen@debian.org>  Sun, 18 Sep 2016 11:04:26 +0530
+ -- Pirate Praveen <praveen@debian.org>  Sun, 18 Sep 2016 11:40:00 +0530
 
 ruby-activerecord-import (0.13.0-1) experimental; urgency=medium
 
