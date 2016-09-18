@@ -1,3 +1,47 @@
+## Changes in 0.15.0
+
+### New Features
+
+* An ArgumentError is now raised if when no `conflict_target` or `conflict_name` is provided or can be determined when using the `on_duplicate_key_update` option for PostgreSQL. Thanks to @jkowens via \#290
+* Support for Rails 5.0 final release for all except the JDBC driver which is not yet updated to support Rails 5.0
+
+### Fixes
+
+* activerecord-import no longer modifies a value array inside of the given values array when called with `import(columns, values)`. Thanks to @jkowens via \#291
+
+### Misc
+
+* `raise_error` is used to raise errors for ActiveRecord 5.0. Thanks to @couragecourag via \#294 `raise_record_invalid` has been
+
+
+## Changes in 0.14.1
+
+### Fixes
+
+* JRuby/JDBCDriver with PostgreSQL will no longer raise a JDBCDriver error when using the :no_returning boolean option. Thanks to @jkowens via \#287
+
+## Changes in 0.14.0
+
+### New Features
+
+* Support for ActiveRecord 3.1 has been dropped. Thanks to @sferik via \#254
+* SQLite3 has learned the :recursive option. Thanks to @jkowens via \#281
+* :on_duplicate_key_ignore will be ignored when imports are being done with :recursive. Thanks to @jkowens via \#268
+* :activerecord-import learned how to tell PostgreSQL to return no data back from the import via the :no_returning boolean option. Thanks to @makaroni4 via \#276
+
+### Fixes
+
+* Polymorphic associations will not import the :type column. Thanks to @seanlinsley via \#282 and \#283
+* ~2X speed increase for importing models with validations. Thanks to @jkowens via \#266
+
+### Misc
+
+* Benchmark HTML report has been fixed. Thanks to @jkowens via \#264
+* seamless_database_pool has been updated to work with AR 5.0. Thanks to @jkowens via \#280
+* Code cleanup, removal of redundant condition checks. Thanks to @pavlik4k via \#273
+* Code cleanup, removal of deprecated `alias_method_chain`. Thanks to @codeodor via \#271
+
+
 ## Changes in 0.13.0
 
 ### New Features

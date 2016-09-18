@@ -6,6 +6,7 @@ module ActiveRecord::Import::PostgreSQLAdapter
 
   def insert_many( sql, values, *args ) # :nodoc:
     number_of_inserts = 1
+    ids = []
 
     base_sql, post_sql = if sql.is_a?( String )
       [sql, '']
@@ -14,7 +15,11 @@ module ActiveRecord::Import::PostgreSQLAdapter
     end
 
     sql2insert = base_sql + values.join( ',' ) + post_sql
-    ids = select_values( sql2insert, *args )
+    if post_sql =~ /RETURNING\s/
+      ids = select_values( sql2insert, *args )
+    else
+      insert( sql2insert, *args )
+    end
 
     ActiveRecord::Base.connection.query_cache.clear
 
@@ -26,7 +31,7 @@ module ActiveRecord::Import::PostgreSQLAdapter
   end
 
   def post_sql_statements( table_name, options ) # :nodoc:
-    if options[:primary_key].blank?
+    if options[:no_returning] || options[:primary_key].blank?
       super(table_name, options)
     else
       super(table_name, options) << "RETURNING #{options[:primary_key]}"
@@ -108,15 +113,16 @@ module ActiveRecord::Import::PostgreSQLAdapter
   def sql_for_conflict_target( args = {} )
     constraint_name = args[:constraint_name]
     conflict_target = args[:conflict_target]
-    if constraint_name
+    if constraint_name.present?
       "ON CONSTRAINT #{constraint_name} "
-    elsif conflict_target
-      '(' << Array( conflict_target ).join( ', ' ) << ') '
+    elsif conflict_target.present?
+      '(' << Array( conflict_target ).reject( &:empty? ).join( ', ' ) << ') '
     end
   end
 
   def sql_for_default_conflict_target( table_name )
-    "(#{primary_key( table_name )}) "
+    conflict_target = primary_key( table_name )
+    "(#{conflict_target}) " if conflict_target
   end
 
   # Return true if the statement is a duplicate key record error

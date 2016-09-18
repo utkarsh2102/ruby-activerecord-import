@@ -7,8 +7,10 @@ module ActiveRecord::Import
 
   def self.base_adapter(adapter)
     case adapter
+    when 'mysql2_makara' then 'mysql2'
     when 'mysql2spatial' then 'mysql2'
     when 'spatialite' then 'sqlite3'
+    when 'postgresql_makara' then 'postgresql'
     when 'postgis' then 'postgresql'
     else adapter
     end

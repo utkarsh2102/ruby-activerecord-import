@@ -8,7 +8,6 @@ env:
     # https://github.com/discourse/discourse/blob/master/.travis.yml
     - RUBY_GC_MALLOC_LIMIT=50000000
   matrix:
-    - AR_VERSION=3.1
     - AR_VERSION=3.2
     - AR_VERSION=4.0
     - AR_VERSION=4.1
@@ -16,6 +15,13 @@ env:
     - AR_VERSION=5.0
 
 matrix:
+  include:
+    - rvm: jruby-9.0.5.0
+      env: AR_VERSION=4.2
+      script:
+        - bundle exec rake test:jdbcmysql
+        - bundle exec rake test:jdbcpostgresql
+
   fast_finish: true
 
 before_script:
@@ -33,9 +39,11 @@ addons:
 
 script:
   - bundle exec rake test:mysql2
+  - bundle exec rake test:mysql2_makara
   - bundle exec rake test:mysql2spatial
   - bundle exec rake test:postgis
   - bundle exec rake test:postgresql
+  - bundle exec rake test:postgresql_makara
   - bundle exec rake test:seamless_database_pool
   - bundle exec rake test:spatialite
   - bundle exec rake test:sqlite3

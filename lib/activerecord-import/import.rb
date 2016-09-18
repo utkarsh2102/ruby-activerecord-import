@@ -61,13 +61,14 @@ class ActiveRecord::Associations::CollectionAssociation
 
       models.each do |m|
         m.public_send "#{symbolized_foreign_key}=", owner_primary_key_value
+        m.public_send "#{reflection.type}=", owner.class.name if reflection.type
       end
 
       return model_klass.import column_names, models, options
 
     # supports empty array
     elsif args.last.is_a?( Array ) && args.last.empty?
-      return ActiveRecord::Import::Result.new([], 0, []) if args.last.empty?
+      return ActiveRecord::Import::Result.new([], 0, [])
 
     # supports 2-element array and array
     elsif args.size == 2 && args.first.is_a?( Array ) && args.last.is_a?( Array )
@@ -80,6 +81,11 @@ class ActiveRecord::Associations::CollectionAssociation
       else
         column_names << symbolized_foreign_key
         array_of_attributes.each { |attrs| attrs << owner_primary_key_value }
+      end
+
+      if reflection.type
+        column_names << reflection.type
+        array_of_attributes.each { |attrs| attrs << owner.class.name }
       end
 
       return model_klass.import column_names, array_of_attributes, options
@@ -168,7 +174,8 @@ class ActiveRecord::Base
     # * +ignore+ - true|false, tells import to use MySQL's INSERT IGNORE
     #    to discard records that contain duplicate keys.
     # * +on_duplicate_key_ignore+ - true|false, tells import to use
-    #    Postgres 9.5+ ON CONFLICT DO NOTHING.
+    #    Postgres 9.5+ ON CONFLICT DO NOTHING. Cannot be enabled on a
+    #    recursive import.
     # * +on_duplicate_key_update+ - an Array or Hash, tells import to
     #    use MySQL's ON DUPLICATE KEY UPDATE or Postgres 9.5+ ON CONFLICT
     #    DO UPDATE ability. See On Duplicate Key Update below.
@@ -350,28 +357,23 @@ class ActiveRecord::Base
           # this next line breaks sqlite.so with a segmentation fault
           # if model.new_record? || options[:on_duplicate_key_update]
           column_names.map do |name|
-            name = name.to_s
-            if respond_to?(:defined_enums) && defined_enums.key?(name) # ActiveRecord 5
-              model.read_attribute(name)
-            else
-              model.read_attribute_before_type_cast(name)
-            end
+            model.read_attribute_before_type_cast(name.to_s)
           end
           # end
         end
         # supports empty array
       elsif args.last.is_a?( Array ) && args.last.empty?
-        return ActiveRecord::Import::Result.new([], 0, []) if args.last.empty?
+        return ActiveRecord::Import::Result.new([], 0, [])
         # supports 2-element array and array
       elsif args.size == 2 && args.first.is_a?( Array ) && args.last.is_a?( Array )
         column_names, array_of_attributes = args
+        array_of_attributes = array_of_attributes.map(&:dup)
       else
         raise ArgumentError, "Invalid arguments!"
       end
 
       # dup the passed in array so we don't modify it unintentionally
       column_names = column_names.dup
-      array_of_attributes = array_of_attributes.dup
 
       # Force the primary key col into the insert if it's not
       # on the list and we are using a sequence and stuff a nil
@@ -387,7 +389,23 @@ class ActiveRecord::Base
       end
 
       return_obj = if is_validating
-        import_with_validations( column_names, array_of_attributes, options )
+        if models
+          import_with_validations( column_names, array_of_attributes, options ) do |failed|
+            models.each_with_index do |model, i|
+              model = model.dup if options[:recursive]
+              next if model.valid?(options[:validate_with_context])
+              if options[:raise_error] && model.respond_to?(:raise_validation_error, true) # Rails 5.0 and higher
+                model.send(:raise_validation_error)
+              elsif options[:raise_error] # Rails 3.2, 4.0, 4.1 and 4.2
+                model.send(:raise_record_invalid)
+              end
+              array_of_attributes[i] = nil
+              failed << model
+            end
+          end
+        else
+          import_with_validations( column_names, array_of_attributes, options )
+        end
       else
         (num_inserts, ids) = import_without_validations_or_callbacks( column_names, array_of_attributes, options )
         ActiveRecord::Import::Result.new([], num_inserts, ids)
@@ -424,21 +442,24 @@ class ActiveRecord::Base
     def import_with_validations( column_names, array_of_attributes, options = {} )
       failed_instances = []
 
-      # create instances for each of our column/value sets
-      arr = validations_array_for_column_names_and_attributes( column_names, array_of_attributes )
+      if block_given?
+        yield failed_instances
+      else
+        # create instances for each of our column/value sets
+        arr = validations_array_for_column_names_and_attributes( column_names, array_of_attributes )
 
-      # keep track of the instance and the position it is currently at. if this fails
-      # validation we'll use the index to remove it from the array_of_attributes
-      arr.each_with_index do |hsh, i|
-        instance = new do |model|
+        # keep track of the instance and the position it is currently at. if this fails
+        # validation we'll use the index to remove it from the array_of_attributes
+        model = new
+        arr.each_with_index do |hsh, i|
           hsh.each_pair { |k, v| model[k] = v }
+          next if model.valid?(options[:validate_with_context])
+          raise(ActiveRecord::RecordInvalid, model) if options[:raise_error]
+          array_of_attributes[i] = nil
+          failed_instances << model.dup
         end
-
-        next if instance.valid?(options[:validate_with_context])
-        raise(ActiveRecord::RecordInvalid, instance) if options[:raise_error]
-        array_of_attributes[i] = nil
-        failed_instances << instance
       end
+
       array_of_attributes.compact!
 
       num_inserts, ids = if array_of_attributes.empty? || options[:all_or_none] && failed_instances.any?
@@ -501,7 +522,7 @@ class ActiveRecord::Base
         end
       else
         values_sql.each do |values|
-          connection.execute(insert_sql + values)
+          ids << connection.insert(insert_sql + values)
           number_inserted += 1
         end
       end
@@ -517,7 +538,7 @@ class ActiveRecord::Base
         model.id = id.to_i
         if model.respond_to?(:clear_changes_information) # Rails 4.0 and higher
           model.clear_changes_information
-        else # Rails 3.1
+        else # Rails 3.2
           model.instance_variable_get(:@changed_attributes).clear
         end
         model.instance_variable_set(:@new_record, false)
@@ -590,7 +611,7 @@ class ActiveRecord::Base
               connection_memo.quote(type_caster.type_cast_for_database(column.name, val))
             elsif column.respond_to?(:type_cast_from_user)                                   # Rails 4.2 and higher
               connection_memo.quote(column.type_cast_from_user(val), column)
-            else                                                                             # Rails 3.1, 3.2, 4.0 and 4.1
+            else                                                                             # Rails 3.2, 4.0 and 4.1
               if serialized_attributes.include?(column.name)
                 val = serialized_attributes[column.name].dump(val)
               end
@@ -636,9 +657,7 @@ class ActiveRecord::Base
 
     # Returns an Array of Hashes for the passed in +column_names+ and +array_of_attributes+.
     def validations_array_for_column_names_and_attributes( column_names, array_of_attributes ) # :nodoc:
-      array_of_attributes.map do |attributes|
-        Hash[attributes.each_with_index.map { |attr, c| [column_names[c], attr] }]
-      end
+      array_of_attributes.map { |values| Hash[column_names.zip(values)] }
     end
   end
 end
