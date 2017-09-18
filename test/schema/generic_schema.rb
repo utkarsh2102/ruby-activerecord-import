@@ -62,8 +62,11 @@ ActiveRecord::Schema.define do
     t.datetime :updated_on
     t.date :publish_date
     t.integer :topic_id
+    t.integer :tag_id
+    t.integer :publisher_id
     t.boolean :for_sale, default: true
     t.integer :status, default: 0
+    t.string :type
   end
 
   create_table :chapters, force: :cascade do |t|
@@ -73,7 +76,7 @@ ActiveRecord::Schema.define do
     t.datetime :updated_at
   end
 
-  create_table :end_notes, force: :cascade do |t|
+  create_table :end_notes, primary_key: :end_note_id, force: :cascade do |t|
     t.string :note
     t.integer :book_id, null: false
     t.datetime :created_at
@@ -111,10 +114,12 @@ ActiveRecord::Schema.define do
   add_index :animals, [:name], unique: true, name: 'uk_animals'
 
   create_table :widgets, id: false, force: :cascade do |t|
-    t.integer :w_id
+    t.integer :w_id, primary_key: true
     t.boolean :active, default: false
     t.text :data
     t.text :json_data
+    t.text :unspecified_data
+    t.text :custom_data
   end
 
   create_table :promotions, primary_key: :promotion_id, force: :cascade do |t|
@@ -131,12 +136,39 @@ ActiveRecord::Schema.define do
     t.string :discountable_type
   end
 
-  create_table :rules, force: :cascade do |t|
+  create_table :rules, id: false, force: :cascade do |t|
+    t.integer :id
     t.string :condition_text
     t.integer :question_id
   end
 
   create_table :questions, force: :cascade do |t|
     t.string :body
+  end
+
+  create_table :vendors, force: :cascade do |t|
+    t.string :name, null: true
+    t.text :preferences
+    t.text :data
+    t.text :config
+    t.text :settings
+  end
+
+  create_table :cars, id: false, force: :cascade do |t|
+    t.string :Name, null: true
+    t.string :Features
+  end
+
+  add_index :cars, :Name, unique: true
+
+  unless ENV["SKIP_COMPOSITE_PK"]
+    execute %(
+    CREATE TABLE IF NOT EXISTS tags (
+          tag_id    INT NOT NULL,
+          publisher_id INT NOT NULL,
+          tag       VARCHAR(50),
+          PRIMARY KEY (tag_id, publisher_id)
+      );
+    ).split.join(' ').strip
   end
 end
