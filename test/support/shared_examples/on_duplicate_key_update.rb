@@ -76,6 +76,20 @@ def should_support_basic_on_duplicate_key_update
           assert_equal 'DISCOUNT2', updated_promotion.code
         end
       end
+
+      unless ENV["SKIP_COMPOSITE_PK"]
+        context "with composite primary keys" do
+          it "should import array of values successfully" do
+            columns = [:tag_id, :publisher_id, :tag]
+            Tag.import columns, [[1, 1, 'Mystery']], validate: false
+
+            assert_difference "Tag.count", +0 do
+              Tag.import columns, [[1, 1, 'Science']], on_duplicate_key_update: [:tag], validate: false
+            end
+            assert_equal 'Science', Tag.first.tag
+          end
+        end
+      end
     end
 
     context "with :on_duplicate_key_update turned off" do

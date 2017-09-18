@@ -1,3 +1,136 @@
+## Changes in 0.19.0
+
+### New Features
+
+* For PostgreSQL, add option to set WHERE condition in conflict_action. Thanks to
+  @Saidbek via \#423.
+
+### Fixes
+
+* Fix issue importing saved records with serialized fields. Thanks to
+  @Andreis13, @jkowens via \#425.
+* Fix issue importing records that have columns defined with default values
+  that are functions or expressions. Thanks to @Andreis13, @jkowens via \#428.
+
+## Changes in 0.18.3
+
+### Fixes
+
+* Set models new_record attribute to false when importing with
+  :on_duplicate_key_ignore. Thanks to @nijikon, @jkowens via \#416.
+
+## Changes in 0.18.2
+
+### Fixes
+
+* Enable custom validate callbacks when validating import. Thanks to @afn via \#410.
+* Prevent wrong IDs being set on models when using :on_duplicate_key_ignore.
+  Thanks to @afn, @jkowens via \#412.
+
+## Changes in 0.18.1
+
+### Fixes
+
+* Fix to enable validation callbacks (before_validation,
+  after_validation). Thanks to @sinsoku, @jkowens via \#406.
+
+## Changes in 0.18.0
+
+### New Features
+
+* Uniqueness validation is bypassed when validating models since
+  it cannot be guaranteed if there are duplicates in a batch.
+  Thanks to @jkowens via \#301.
+* Allow for custom timestamp columns. Thanks to @mojidabckuu, @jkowens
+  via \#401.
+ 
+### Fixes
+
+* Fix ActiveRecord 5 issue coercing boolean values when serializing
+  for the database. Thanks to @rjrobinson, @jkowens via \#403.
+
+## Changes in 0.17.2
+
+### Fixes
+
+* Fix issue where PostgreSQL cannot recognize columns if names
+  include mixed case characters. Thanks to @hugobgranja via \#379.
+* Fix an issue for ActiveRecord 5 where serialized fields with 
+  default values were not being typecast. Thanks to @whistlerbrk,
+  @jkowens via \#386.
+* Add option :force_single_insert for MySQL to make sure a single
+  insert is attempted instead of performing multiple inserts based
+  on max_allowed_packet. Thanks to @mtparet via \#387.
+
+## Changes in 0.17.1
+
+### Fixes
+
+* Along with setting id on models for adapters that support it,
+  add created_at and updated_at timestamps. Thanks to @jacob-carlborg
+  via \#364.
+* Properly set returned ids when using composite_primary_keys.
+  Thanks to @guigs, @jkowens via \#371.
+
+## Changes in 0.17.0
+
+### New Features
+
+* Add support for composite_primary_keys gem. Thanks to @jkowens
+  via \#350.
+* Add support for importing an array of hashes. Thanks to @jkowens
+  via \#352.
+* Add JDBC SQLite3 support. Thanks to @jkowens via \#356.
+
+### Fixes
+
+* Remove support for SQLite recursive imports. See \#351.
+* Improve import speed for Rails 5. Thanks to @ranchodeluxe, @jkowens
+  via \#359.
+
+## Changes in 0.16.2
+
+### Fixes
+
+* Fixes issue clearing query cache on wrong connection when using
+  multiple databases. Thanks to @KentoMoriwaki via \#337
+* Raises an ArgumentError on incorrect usage of nested arrays. Thanks
+  to @Nitrodist via \#340
+* Fixes issue that prevented uuid primary keys from being set manually.
+  Thanks to @Dclusin-og, @jkowens via \#342
+
+## Changes in 0.16.1
+
+### Fixes
+
+* Fixes issue with missing error messages on failed instances when
+  importing using arrays of columns and values. Thanks to @Fivell via \#332
+* Update so SQLite only return ids if table has a primary key field via \#333
+
+
+## Changes in 0.16.0
+
+### New Features
+
+* Add partial index upsert support for PostgreSQL. Thanks to @luislew via \#305
+* Add UUID primary key support for PostgreSQL. Thanks to @jkowens via
+  \#312
+* Add store accessor support for JSON, JSON, and HSTORE data types.
+  Thanks to @jkowens via \#322
+* Log warning if database does not support :on_duplicate_key_update.
+  Thanks to @jkowens via \#324
+* Add option :on_duplicate_key_ignore for MySQL and SQLite. Thanks to
+  @jkowens via \#326
+
+### Fixes
+
+* Fixes issue with recursive import using same primary key for all models.
+  Thanks to @chopraanmol1 via \#309
+* Fixes issue importing from STI subclass with polymorphic associations.
+  Thanks to @JNajera via \#314
+* Fixes issue setting returned IDs to wrong models when some fail validation. Also fixes issue with SQLite returning wrong IDs. Thanks to @mizukami234 via \#315
+
+
 ## Changes in 0.15.0
 
 ### New Features
