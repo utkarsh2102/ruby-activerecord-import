@@ -1,9 +1,10 @@
-ruby-activerecord-import (0.19.0-1) UNRELEASED; urgency=medium
+ruby-activerecord-import (0.19.0-1) unstable; urgency=medium
 
   * Team upload
   * New upstream release
+  * Refresh patches
 
- -- Sruthi Chandran <srud@disroot.org>  Mon, 18 Sep 2017 21:29:21 +0530
+ -- Sruthi Chandran <srud@disroot.org>  Mon, 18 Sep 2017 23:42:54 +0530
 
 ruby-activerecord-import (0.15.0-2) unstable; urgency=medium
 
