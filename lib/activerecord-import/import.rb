@@ -3,7 +3,7 @@ require "ostruct"
 module ActiveRecord::Import::ConnectionAdapters; end
 
 module ActiveRecord::Import #:nodoc:
-  Result = Struct.new(:failed_instances, :num_inserts, :ids)
+  Result = Struct.new(:failed_instances, :num_inserts, :ids, :results)
 
   module ImportSupport #:nodoc:
     def supports_import? #:nodoc:
@@ -38,7 +38,7 @@ module ActiveRecord::Import #:nodoc:
         model.errors.clear
 
         validate_callbacks = model._validate_callbacks.dup
-        validate_callbacks.each do |callback|
+        model._validate_callbacks.each do |callback|
           validate_callbacks.delete(callback) if callback.raw_filter.is_a? ActiveRecord::Validations::UniquenessValidator
         end
 
@@ -79,13 +79,14 @@ module ActiveRecord::Import #:nodoc:
 end
 
 class ActiveRecord::Associations::CollectionProxy
-  def import(*args, &block)
-    @association.import(*args, &block)
+  def bulk_import(*args, &block)
+    @association.bulk_import(*args, &block)
   end
+  alias import bulk_import unless respond_to? :import
 end
 
 class ActiveRecord::Associations::CollectionAssociation
-  def import(*args, &block)
+  def bulk_import(*args, &block)
     unless owner.persisted?
       raise ActiveRecord::RecordNotSaved, "You cannot call import unless the parent is saved"
     end
@@ -96,14 +97,14 @@ class ActiveRecord::Associations::CollectionAssociation
     symbolized_foreign_key = reflection.foreign_key.to_sym
     symbolized_column_names = model_klass.column_names.map(&:to_sym)
 
-    owner_primary_key = owner.class.primary_key
+    owner_primary_key = reflection.active_record_primary_key.to_sym
     owner_primary_key_value = owner.send(owner_primary_key)
 
     # assume array of model objects
     if args.last.is_a?( Array ) && args.last.first.is_a?(ActiveRecord::Base)
       if args.length == 2
         models = args.last
-        column_names = args.first
+        column_names = args.first.dup
       else
         models = args.first
         column_names = symbolized_column_names
@@ -118,7 +119,46 @@ class ActiveRecord::Associations::CollectionAssociation
         m.public_send "#{reflection.type}=", owner.class.name if reflection.type
       end
 
-      return model_klass.import column_names, models, options
+      return model_klass.bulk_import column_names, models, options
+
+    # supports array of hash objects
+    elsif args.last.is_a?( Array ) && args.last.first.is_a?(Hash)
+      if args.length == 2
+        array_of_hashes = args.last
+        column_names = args.first.dup
+        allow_extra_hash_keys = true
+      else
+        array_of_hashes = args.first
+        column_names = array_of_hashes.first.keys
+        allow_extra_hash_keys = false
+      end
+
+      symbolized_column_names = column_names.map(&:to_sym)
+      unless symbolized_column_names.include?(symbolized_foreign_key)
+        column_names << symbolized_foreign_key
+      end
+
+      if reflection.type && !symbolized_column_names.include?(reflection.type.to_sym)
+        column_names << reflection.type.to_sym
+      end
+
+      array_of_attributes = array_of_hashes.map do |h|
+        error_message = model_klass.send(:validate_hash_import, h, symbolized_column_names, allow_extra_hash_keys)
+
+        raise ArgumentError, error_message if error_message
+
+        column_names.map do |key|
+          if key == symbolized_foreign_key
+            owner_primary_key_value
+          elsif reflection.type && key == reflection.type.to_sym
+            owner.class.name
+          else
+            h[key]
+          end
+        end
+      end
+
+      return model_klass.bulk_import column_names, array_of_attributes, options
 
     # supports empty array
     elsif args.last.is_a?( Array ) && args.last.empty?
@@ -127,7 +167,12 @@ class ActiveRecord::Associations::CollectionAssociation
     # supports 2-element array and array
     elsif args.size == 2 && args.first.is_a?( Array ) && args.last.is_a?( Array )
       column_names, array_of_attributes = args
-      symbolized_column_names = column_names.map(&:to_s)
+
+      # dup the passed args so we don't modify unintentionally
+      column_names = column_names.dup
+      array_of_attributes = array_of_attributes.map(&:dup)
+
+      symbolized_column_names = column_names.map(&:to_sym)
 
       if symbolized_column_names.include?(symbolized_foreign_key)
         index = symbolized_column_names.index(symbolized_foreign_key)
@@ -138,19 +183,35 @@ class ActiveRecord::Associations::CollectionAssociation
       end
 
       if reflection.type
-        column_names << reflection.type
-        array_of_attributes.each { |attrs| attrs << owner.class.name }
+        symbolized_type = reflection.type.to_sym
+        if symbolized_column_names.include?(symbolized_type)
+          index = symbolized_column_names.index(symbolized_type)
+          array_of_attributes.each { |attrs| attrs[index] = owner.class.name }
+        else
+          column_names << symbolized_type
+          array_of_attributes.each { |attrs| attrs << owner.class.name }
+        end
       end
 
-      return model_klass.import column_names, array_of_attributes, options
+      return model_klass.bulk_import column_names, array_of_attributes, options
     else
       raise ArgumentError, "Invalid arguments!"
     end
   end
+  alias import bulk_import unless respond_to? :import
 end
 
 class ActiveRecord::Base
   class << self
+    def establish_connection_with_activerecord_import(*args)
+      conn = establish_connection_without_activerecord_import(*args)
+      ActiveRecord::Import.load_from_connection_pool connection_pool
+      conn
+    end
+
+    alias establish_connection_without_activerecord_import establish_connection
+    alias establish_connection establish_connection_with_activerecord_import
+
     # Returns true if the current database connection adapter
     # supports import functionality, otherwise returns false.
     def supports_import?(*args)
@@ -161,14 +222,14 @@ class ActiveRecord::Base
     # supports on duplicate key update functionality, otherwise
     # returns false.
     def supports_on_duplicate_key_update?
-      connection.supports_on_duplicate_key_update?
+      connection.respond_to?(:supports_on_duplicate_key_update?) && connection.supports_on_duplicate_key_update?
     end
 
     # returns true if the current database connection adapter
     # supports setting the primary key of bulk imported models, otherwise
     # returns false
-    def support_setting_primary_key_of_imported_objects?
-      connection.respond_to?(:support_setting_primary_key_of_imported_objects?) && connection.support_setting_primary_key_of_imported_objects?
+    def supports_setting_primary_key_of_imported_objects?
+      connection.respond_to?(:supports_setting_primary_key_of_imported_objects?) && connection.supports_setting_primary_key_of_imported_objects?
     end
 
     # Imports a collection of values to the database.
@@ -214,18 +275,21 @@ class ActiveRecord::Base
     #
     # == Options
     # * +validate+ - true|false, tells import whether or not to use
-    #    ActiveRecord validations. Validations are enforced by default.
+    #   ActiveRecord validations. Validations are enforced by default.
+    #   It skips the uniqueness validation for performance reasons.
+    #   You can find more details here:
+    #   https://github.com/zdennis/activerecord-import/issues/228
     # * +ignore+ - true|false, an alias for on_duplicate_key_ignore.
     # * +on_duplicate_key_ignore+ - true|false, tells import to discard
-    #    records that contain duplicate keys. For Postgres 9.5+ it adds
-    #    ON CONFLICT DO NOTHING, for MySQL it uses INSERT IGNORE, and for
-    #    SQLite it uses INSERT OR IGNORE. Cannot be enabled on a
-    #    recursive import. For database adapters that normally support
-    #    setting primary keys on imported objects, this option prevents
-    #    that from occurring.
+    #   records that contain duplicate keys. For Postgres 9.5+ it adds
+    #   ON CONFLICT DO NOTHING, for MySQL it uses INSERT IGNORE, and for
+    #   SQLite it uses INSERT OR IGNORE. Cannot be enabled on a
+    #   recursive import. For database adapters that normally support
+    #   setting primary keys on imported objects, this option prevents
+    #   that from occurring.
     # * +on_duplicate_key_update+ - an Array or Hash, tells import to
-    #    use MySQL's ON DUPLICATE KEY UPDATE or Postgres 9.5+ ON CONFLICT
-    #    DO UPDATE ability. See On Duplicate Key Update below.
+    #   use MySQL's ON DUPLICATE KEY UPDATE or Postgres 9.5+ ON CONFLICT
+    #   DO UPDATE ability. See On Duplicate Key Update below.
     # * +synchronize+ - an array of ActiveRecord instances for the model
     #   that you are currently importing data into. This synchronizes
     #   existing model instances in memory with updates from the import.
@@ -247,6 +311,9 @@ class ActiveRecord::Base
     #  BlogPost.import posts
     #
     #  # Example using array_of_hash_objects
+    #  # NOTE: column_names will be determined by using the keys of the first hash in the array. If later hashes in the
+    #  # array have different keys an exception will be raised. If you have hashes to import with different sets of keys
+    #  # we recommend grouping these into batches before importing.
     #  values = [ {author_name: 'zdennis', title: 'test post'} ], [ {author_name: 'jdoe', title: 'another test post'} ] ]
     #  BlogPost.import values
     #
@@ -323,7 +390,7 @@ class ActiveRecord::Base
     # conflicting constraint to be explicitly specified. Using this option
     # allows you to specify a constraint other than the primary key.
     #
-    # ====== :conflict_target
+    # ===== :conflict_target
     #
     # The :conflict_target attribute specifies the columns that make up the
     # conflicting unique constraint and can be a single column or an array of
@@ -333,7 +400,7 @@ class ActiveRecord::Base
     #
     #   BlogPost.import columns, values, on_duplicate_key_update: { conflict_target: [ :author_id, :slug ], columns: [ :date_modified ] }
     #
-    # ====== :index_predicate
+    # ===== :index_predicate
     #
     # The :index_predicate attribute optionally specifies a WHERE condition
     # on :conflict_target, which is required for matching against partial
@@ -342,7 +409,7 @@ class ActiveRecord::Base
     #
     #   BlogPost.import columns, values, on_duplicate_key_update: { conflict_target: [ :author_id, :slug ], index_predicate: 'status <> 0', columns: [ :date_modified ] }
     #
-    # ====== :constraint_name
+    # ===== :constraint_name
     #
     # The :constraint_name attribute explicitly identifies the conflicting
     # unique index by name. Postgres documentation discourages using this method
@@ -350,7 +417,7 @@ class ActiveRecord::Base
     #
     #   BlogPost.import columns, values, on_duplicate_key_update: { constraint_name: :blog_posts_pkey, columns: [ :date_modified ] }
     #
-    # ====== :condition
+    # ===== :condition
     #
     # The :condition attribute optionally specifies a WHERE condition
     # on :conflict_action. Only rows for which this expression returns true will be updated.
@@ -358,12 +425,12 @@ class ActiveRecord::Base
     # Below is an example:
     #
     #   BlogPost.import columns, values, on_duplicate_key_update: { conflict_target: [ :author_id ], condition: "blog_posts.title NOT LIKE '%sample%'", columns: [ :author_name ] }
-
-    # ====== :columns
+    #
+    # ===== :columns
     #
     # The :columns attribute can be either an Array or a Hash.
     #
-    # ======== Using an Array
+    # ===== Using an Array
     #
     # The :columns attribute can be an array of column names. The column names
     # are the only fields that are updated if a duplicate record is found.
@@ -371,7 +438,7 @@ class ActiveRecord::Base
     #
     #   BlogPost.import columns, values, on_duplicate_key_update: { conflict_target: :slug, columns: [ :date_modified, :content, :author ] }
     #
-    # ========  Using a Hash
+    # =====  Using a Hash
     #
     # The :columns option can be a hash of column names to model attribute name
     # mappings. This gives you finer grained control over what fields are updated
@@ -384,7 +451,8 @@ class ActiveRecord::Base
     # * failed_instances - an array of objects that fails validation and were not committed to the database. An empty array if no validation is performed.
     # * num_inserts - the number of insert statements it took to import the data
     # * ids - the primary keys of the imported ids if the adapter supports it, otherwise an empty array.
-    def import(*args)
+    # * results - import results if the adapter supports it, otherwise an empty array.
+    def bulk_import(*args)
       if args.first.is_a?( Array ) && args.first.first.is_a?(ActiveRecord::Base)
         options = {}
         options.merge!( args.pop ) if args.last.is_a?(Hash)
@@ -395,27 +463,35 @@ class ActiveRecord::Base
         import_helper(*args)
       end
     end
+    alias import bulk_import unless respond_to? :import
 
     # Imports a collection of values if all values are valid. Import fails at the
     # first encountered validation error and raises ActiveRecord::RecordInvalid
     # with the failed instance.
-    def import!(*args)
+    def bulk_import!(*args)
       options = args.last.is_a?( Hash ) ? args.pop : {}
       options[:validate] = true
       options[:raise_error] = true
 
-      import(*args, options)
+      bulk_import(*args, options)
     end
+    alias import! bulk_import! unless respond_to? :import!
 
     def import_helper( *args )
       options = { validate: true, timestamps: true }
       options.merge!( args.pop ) if args.last.is_a? Hash
       # making sure that current model's primary key is used
       options[:primary_key] = primary_key
+      options[:locking_column] = locking_column if attribute_names.include?(locking_column)
 
       # Don't modify incoming arguments
-      if options[:on_duplicate_key_update] && options[:on_duplicate_key_update].duplicable?
-        options[:on_duplicate_key_update] = options[:on_duplicate_key_update].dup
+      on_duplicate_key_update = options[:on_duplicate_key_update]
+      if on_duplicate_key_update && on_duplicate_key_update.duplicable?
+        options[:on_duplicate_key_update] = if on_duplicate_key_update.is_a?(Hash)
+          on_duplicate_key_update.each { |k, v| on_duplicate_key_update[k] = v.dup if v.duplicable? }
+        else
+          on_duplicate_key_update.dup
+        end
       end
 
       is_validating = options[:validate]
@@ -445,6 +521,10 @@ class ActiveRecord::Base
         end
 
         array_of_attributes = models.map do |model|
+          if supports_setting_primary_key_of_imported_objects?
+            load_association_ids(model)
+          end
+
           column_names.map do |name|
             if stored_attrs.key?(name.to_sym) ||
                serialized_attrs.key?(name) ||
@@ -460,12 +540,18 @@ class ActiveRecord::Base
         if args.length == 2
           array_of_hashes = args.last
           column_names = args.first.dup
+          allow_extra_hash_keys = true
         else
           array_of_hashes = args.first
           column_names = array_of_hashes.first.keys
+          allow_extra_hash_keys = false
         end
 
         array_of_attributes = array_of_hashes.map do |h|
+          error_message = validate_hash_import(h, column_names, allow_extra_hash_keys)
+
+          raise ArgumentError, error_message if error_message
+
           column_names.map do |key|
             h[key]
           end
@@ -497,7 +583,7 @@ class ActiveRecord::Base
 
       if !symbolized_primary_key.to_set.subset?(symbolized_column_names.to_set) && connection.prefetch_primary_key? && sequence_name
         column_count = column_names.size
-        column_names.concat(primary_key).uniq!
+        column_names.concat(Array(primary_key)).uniq!
         columns_added = column_names.size - column_count
         new_fields = Array.new(columns_added)
         array_of_attributes.each { |a| a.concat(new_fields) }
@@ -514,7 +600,6 @@ class ActiveRecord::Base
         if models
           import_with_validations( column_names, array_of_attributes, options ) do |validator, failed|
             models.each_with_index do |model, i|
-              model = model.dup if options[:recursive]
               next if validator.valid_model? model
               raise(ActiveRecord::RecordInvalid, model) if options[:raise_error]
               array_of_attributes[i] = nil
@@ -525,8 +610,7 @@ class ActiveRecord::Base
           import_with_validations( column_names, array_of_attributes, options )
         end
       else
-        (num_inserts, ids) = import_without_validations_or_callbacks( column_names, array_of_attributes, options )
-        ActiveRecord::Import::Result.new([], num_inserts, ids)
+        import_without_validations_or_callbacks( column_names, array_of_attributes, options )
       end
 
       if options[:synchronize]
@@ -536,8 +620,8 @@ class ActiveRecord::Base
       return_obj.num_inserts = 0 if return_obj.num_inserts.nil?
 
       # if we have ids, then set the id on the models and mark the models as clean.
-      if models && support_setting_primary_key_of_imported_objects?
-        set_attributes_and_mark_clean(models, return_obj, timestamps)
+      if models && supports_setting_primary_key_of_imported_objects?
+        set_attributes_and_mark_clean(models, return_obj, timestamps, options)
 
         # if there are auto-save associations on the models we imported that are new, import them as well
         import_associations(models, options.dup) if options[:recursive]
@@ -566,8 +650,8 @@ class ActiveRecord::Base
 
         # keep track of the instance and the position it is currently at. if this fails
         # validation we'll use the index to remove it from the array_of_attributes
-        model = new
         arr.each_with_index do |hsh, i|
+          model = new
           hsh.each_pair { |k, v| model[k] = v }
           next if validator.valid_model? model
           raise(ActiveRecord::RecordInvalid, model) if options[:raise_error]
@@ -580,12 +664,12 @@ class ActiveRecord::Base
 
       array_of_attributes.compact!
 
-      num_inserts, ids = if array_of_attributes.empty? || options[:all_or_none] && failed_instances.any?
-        [0, []]
+      result = if options[:all_or_none] && failed_instances.any?
+        ActiveRecord::Import::Result.new([], 0, [], [])
       else
         import_without_validations_or_callbacks( column_names, array_of_attributes, options )
       end
-      ActiveRecord::Import::Result.new(failed_instances, num_inserts, ids)
+      ActiveRecord::Import::Result.new(failed_instances, result.num_inserts, result.ids, result.results)
     end
 
     # Imports the passed in +column_names+ and +array_of_attributes+
@@ -595,6 +679,8 @@ class ActiveRecord::Base
     # information on +column_names+, +array_of_attributes_ and
     # +options+.
     def import_without_validations_or_callbacks( column_names, array_of_attributes, options = {} )
+      return ActiveRecord::Import::Result.new([], 0, [], []) if array_of_attributes.empty?
+
       column_names = column_names.map(&:to_sym)
       scope_columns, scope_values = scope_attributes.to_a.transpose
 
@@ -604,7 +690,7 @@ class ActiveRecord::Base
           next if column_names.include?(name_as_sym)
 
           is_sti = (name_as_sym == inheritance_column.to_sym && self < base_class)
-          value = value.first if is_sti
+          value = Array(value).first if is_sti
 
           column_names << name_as_sym
           array_of_attributes.each { |attrs| attrs << value }
@@ -627,6 +713,7 @@ class ActiveRecord::Base
 
       number_inserted = 0
       ids = []
+      results = []
       if supports_import?
         # generate the sql
         post_sql_statements = connection.post_sql_statements( quoted_table_name, options )
@@ -637,9 +724,10 @@ class ActiveRecord::Base
           result = connection.insert_many( [insert_sql, post_sql_statements].flatten,
             batch_values,
             options,
-            "#{self.class.name} Create Many Without Validations Or Callbacks" )
-          number_inserted += result[0]
-          ids += result[1]
+            "#{model_name} Create Many Without Validations Or Callbacks" )
+          number_inserted += result.num_inserts
+          ids += result.ids
+          results += result.results
         end
       else
         transaction(requires_new: true) do
@@ -649,22 +737,14 @@ class ActiveRecord::Base
           end
         end
       end
-      [number_inserted, ids]
+      ActiveRecord::Import::Result.new([], number_inserted, ids, results)
     end
 
     private
 
-    def set_attributes_and_mark_clean(models, import_result, timestamps)
+    def set_attributes_and_mark_clean(models, import_result, timestamps, options)
       return if models.nil?
       models -= import_result.failed_instances
-      models.each do |model|
-        if model.respond_to?(:clear_changes_information) # Rails 4.0 and higher
-          model.clear_changes_information
-        else # Rails 3.2
-          model.instance_variable_get(:@changed_attributes).clear
-        end
-        model.instance_variable_set(:@new_record, false)
-      end
 
       # if ids were returned for all models we know all were updated
       if models.size == import_result.ids.size
@@ -676,6 +756,46 @@ class ActiveRecord::Base
             model.send(attr + "=", value)
           end
         end
+      end
+
+      if models.size == import_result.results.size
+        columns = Array(options[:returning])
+        single_column = "#{columns.first}=" if columns.size == 1
+        import_result.results.each_with_index do |result, index|
+          model = models[index]
+
+          if single_column
+            model.send(single_column, result)
+          else
+            columns.each_with_index do |column, col_index|
+              model.send("#{column}=", result[col_index])
+            end
+          end
+        end
+      end
+
+      models.each do |model|
+        if model.respond_to?(:clear_changes_information) # Rails 4.0 and higher
+          model.clear_changes_information
+        else # Rails 3.2
+          model.instance_variable_get(:@changed_attributes).clear
+        end
+        model.instance_variable_set(:@new_record, false)
+      end
+    end
+
+    # Sync belongs_to association ids with foreign key field
+    def load_association_ids(model)
+      association_reflections = model.class.reflect_on_all_associations(:belongs_to)
+      association_reflections.each do |association_reflection|
+        column_name = association_reflection.foreign_key
+        next if association_reflection.options[:polymorphic]
+        association = model.association(association_reflection.name)
+        association = association.target
+        next if association.blank? || model.public_send(column_name).present?
+
+        association_primary_key = association_reflection.association_primary_key
+        model.public_send("#{column_name}=", association.send(association_primary_key))
       end
     end
 
@@ -693,7 +813,7 @@ class ActiveRecord::Base
 
       associated_objects_by_class.each_value do |associations|
         associations.each_value do |associated_records|
-          associated_records.first.class.import(associated_records, options) unless associated_records.empty?
+          associated_records.first.class.bulk_import(associated_records, options) unless associated_records.empty?
         end
       end
     end
@@ -702,6 +822,7 @@ class ActiveRecord::Base
     # of class => objects to import.
     def find_associated_objects_for_import(associated_objects_by_class, model)
       associated_objects_by_class[model.class.name] ||= {}
+      return associated_objects_by_class unless model.id
 
       association_reflections =
         model.class.reflect_on_all_associations(:has_one) +
@@ -742,6 +863,8 @@ class ActiveRecord::Base
           # be sure to query sequence_name *last*, only if cheaper tests fail, because it's costly
           if val.nil? && column.name == primary_key && !sequence_name.blank?
             connection_memo.next_value_for_sequence(sequence_name)
+          elsif val.respond_to?(:to_sql)
+            "(#{val.to_sql})"
           elsif column
             if respond_to?(:type_caster)                                         # Rails 5.0 and higher
               type = type_for_attribute(column.name)
@@ -753,7 +876,9 @@ class ActiveRecord::Base
               if serialized_attributes.include?(column.name)
                 val = serialized_attributes[column.name].dump(val)
               end
-              connection_memo.quote(column.type_cast(val), column)
+              # Fixes #443 to support binary (i.e. bytea) columns on PG
+              val = column.type_cast(val) unless column.type.to_sym == :binary
+              connection_memo.quote(val, column)
             end
           end
         end
@@ -803,6 +928,43 @@ class ActiveRecord::Base
     # Returns an Array of Hashes for the passed in +column_names+ and +array_of_attributes+.
     def validations_array_for_column_names_and_attributes( column_names, array_of_attributes ) # :nodoc:
       array_of_attributes.map { |values| Hash[column_names.zip(values)] }
+    end
+
+    # Checks that the imported hash has the required_keys, optionally also checks that the hash has
+    # no keys beyond those required when `allow_extra_keys` is false.
+    # returns `nil` if validation passes, or an error message if it fails
+    def validate_hash_import(hash, required_keys, allow_extra_keys) # :nodoc:
+      extra_keys = allow_extra_keys ? [] : hash.keys - required_keys
+      missing_keys = required_keys - hash.keys
+
+      return nil if extra_keys.empty? && missing_keys.empty?
+
+      if allow_extra_keys
+        <<-EOS
+Hash key mismatch.
+
+When importing an array of hashes with provided columns_names, each hash must contain keys for all column_names.
+
+Required keys: #{column_names}
+Missing keys: #{missing_keys}
+
+Hash: #{hash}
+        EOS
+      else
+        <<-EOS
+Hash key mismatch.
+
+When importing an array of hashes, all hashes must have the same keys.
+If you have records that are missing some values, we recommend you either set default values
+for the missing keys or group these records into batches by key set before importing.
+
+Required keys: #{column_names}
+Extra keys: #{extra_keys}
+Missing keys: #{missing_keys}
+
+Hash: #{hash}
+        EOS
+      end
     end
   end
 end
