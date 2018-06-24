@@ -86,6 +86,54 @@ describe "#import" do
         assert_nil t.author_email_address
       end
     end
+
+    context "with extra keys" do
+      let(:values) do
+        [
+          { title: "LDAP", author_name: "Jerry Carter" },
+          { title: "Rails Recipes", author_name: "Chad Fowler", author_email_address: "cfowler@test.com" } # author_email_address is unknown
+        ]
+      end
+
+      it "should fail when column names are not specified" do
+        err = assert_raises ArgumentError do
+          Topic.import values, validate: false
+        end
+
+        assert err.message.include? 'Extra keys: [:author_email_address]'
+      end
+
+      it "should succeed when column names are specified" do
+        assert_difference "Topic.count", +2 do
+          Topic.import columns, values, validate: false
+        end
+      end
+    end
+
+    context "with missing keys" do
+      let(:values) do
+        [
+          { title: "LDAP", author_name: "Jerry Carter" },
+          { title: "Rails Recipes" } # author_name is missing
+        ]
+      end
+
+      it "should fail when column names are not specified" do
+        err = assert_raises ArgumentError do
+          Topic.import values, validate: false
+        end
+
+        assert err.message.include? 'Missing keys: [:author_name]'
+      end
+
+      it "should fail on missing hash key from specified column names" do
+        err = assert_raises ArgumentError do
+          Topic.import %i(author_name), values, validate: false
+        end
+
+        assert err.message.include? 'Missing keys: [:author_name]'
+      end
+    end
   end
 
   unless ENV["SKIP_COMPOSITE_PK"]
@@ -121,12 +169,12 @@ describe "#import" do
   end
 
   context "with :validation option" do
-    let(:columns) { %w(title author_name) }
-    let(:valid_values) { [["LDAP", "Jerry Carter"], ["Rails Recipes", "Chad Fowler"]] }
-    let(:valid_values_with_context) { [[1111, "Jerry Carter"], [2222, "Chad Fowler"]] }
-    let(:invalid_values) { [["The RSpec Book", ""], ["Agile+UX", ""]] }
-    let(:valid_models) { valid_values.map { |title, author_name| Topic.new(title: title, author_name: author_name) } }
-    let(:invalid_models) { invalid_values.map { |title, author_name| Topic.new(title: title, author_name: author_name) } }
+    let(:columns) { %w(title author_name content) }
+    let(:valid_values) { [["LDAP", "Jerry Carter", "Putting Directories to Work."], ["Rails Recipes", "Chad Fowler", "A trusted collection of solutions."]] }
+    let(:valid_values_with_context) { [[1111, "Jerry Carter", "1111"], [2222, "Chad Fowler", "2222"]] }
+    let(:invalid_values) { [["The RSpec Book", "David Chelimsky", "..."], ["Agile+UX", "", "All about Agile in UX."]] }
+    let(:valid_models) { valid_values.map { |title, author_name, content| Topic.new(title: title, author_name: author_name, content: content) } }
+    let(:invalid_models) { invalid_values.map { |title, author_name, content| Topic.new(title: title, author_name: author_name, content: content) } }
 
     context "with validation checks turned off" do
       it "should import valid data" do
@@ -200,7 +248,7 @@ describe "#import" do
       end
 
       it "should set ids in valid models if adapter supports setting primary key of imported objects" do
-        if ActiveRecord::Base.support_setting_primary_key_of_imported_objects?
+        if ActiveRecord::Base.supports_setting_primary_key_of_imported_objects?
           Topic.import (invalid_models + valid_models), validate: true
           assert_nil invalid_models[0].id
           assert_nil invalid_models[1].id
@@ -210,7 +258,7 @@ describe "#import" do
       end
 
       it "should set ActiveRecord timestamps in valid models if adapter supports setting primary key of imported objects" do
-        if ActiveRecord::Base.support_setting_primary_key_of_imported_objects?
+        if ActiveRecord::Base.supports_setting_primary_key_of_imported_objects?
           Timecop.freeze(Time.at(0)) do
             Topic.import (invalid_models + valid_models), validate: true
           end
@@ -320,7 +368,7 @@ describe "#import" do
 
       it "doesn't reload any data (doesn't work)" do
         Topic.import new_topics, synchronize: new_topics
-        if Topic.support_setting_primary_key_of_imported_objects?
+        if Topic.supports_setting_primary_key_of_imported_objects?
           assert new_topics.all?(&:persisted?), "Records should have been reloaded"
         else
           assert new_topics.all?(&:new_record?), "No record should have been reloaded"
@@ -541,7 +589,32 @@ describe "#import" do
 
           assert_equal [val1, val2], scope.map(&column).sort
         end
+
+        it "works importing array of hashes" do
+          scope.import [{ column => val1 }, { column => val2 }]
+
+          assert_equal [val1, val2], scope.map(&column).sort
+        end
       end
+
+      it "works with a non-standard association primary key" do
+        user = User.create(id: 1, name: 'Solomon')
+        user.user_tokens.import [:id, :token], [[5, '12345abcdef67890']]
+
+        token = UserToken.find(5)
+        assert_equal 'Solomon', token.user_name
+      end
+    end
+  end
+
+  context "importing model with polymorphic belongs_to" do
+    it "works without error" do
+      book     = FactoryGirl.create :book
+      discount = Discount.new(discountable: book)
+
+      Discount.import([discount])
+
+      assert_equal 1, Discount.count
     end
   end
 
@@ -757,6 +830,20 @@ describe "#import" do
           assert_difference "Topic.count", +2 do
             Topic.import! columns, valid_values
           end
+        end
+      end
+    end
+
+    context "with objects that respond to .to_sql as values" do
+      let(:columns) { %w(title author_name) }
+      let(:valid_values) { [["LDAP", Book.select("'Jerry Carter'").limit(1)], ["Rails Recipes", Book.select("'Chad Fowler'").limit(1)]] }
+
+      it "should import data" do
+        assert_difference "Topic.count", +2 do
+          Topic.import! columns, valid_values
+          topics = Topic.all
+          assert_equal "Jerry Carter", topics.first.author_name
+          assert_equal "Chad Fowler", topics.last.author_name
         end
       end
     end

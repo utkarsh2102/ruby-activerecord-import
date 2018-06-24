@@ -90,6 +90,19 @@ def should_support_recursive_import
       end
     end
 
+    # Models are only valid if all associations are valid
+    it "only imports models with valid associations" do
+      assert_difference "Topic.count", 2 do
+        assert_difference "Book.count", 4 do
+          assert_difference "Chapter.count", 12 do
+            assert_difference "EndNote.count", 16 do
+              Topic.import new_topics_with_invalid_chapter, recursive: true
+            end
+          end
+        end
+      end
+    end
+
     it "skips validation of the associations if requested" do
       assert_difference "Chapter.count", +num_chapters do
         Topic.import new_topics_with_invalid_chapter, validate: false, recursive: true
@@ -99,6 +112,31 @@ def should_support_recursive_import
     it 'imports has_one associations' do
       assert_difference 'Rule.count' do
         Question.import [new_question_with_rule], recursive: true
+      end
+    end
+
+    it "imports an imported belongs_to association id" do
+      first_new_topic = new_topics[0]
+      second_new_topic = new_topics[1]
+
+      books = first_new_topic.books.to_a
+      Topic.import new_topics, validate: false
+
+      assert_difference "Book.count", books.size do
+        Book.import books, validate: false
+      end
+
+      books.each do |book|
+        assert_equal book.topic_id, first_new_topic.id
+      end
+
+      books.each { |book| book.topic_id = second_new_topic.id }
+      assert_no_difference "Book.count", books.size do
+        Book.import books, validate: false, on_duplicate_key_update: [:topic_id]
+      end
+
+      books.each do |book|
+        assert_equal book.topic_id, second_new_topic.id
       end
     end
 
@@ -119,20 +157,12 @@ def should_support_recursive_import
       end
     end
 
-    # These models dont validate associated.  So we expect that books and topics get inserted, but not chapters
-    # Putting a transaction around everything wouldn't work, so if you want your chapters to prevent topics from
-    # being created, you would need to have validates_associated in your models and insert with validation
     describe "all_or_none" do
-      [Book, Topic, EndNote].each do |type|
+      [Book, Chapter, Topic, EndNote].each do |type|
         it "creates #{type}" do
-          assert_difference "#{type}.count", send("num_#{type.to_s.downcase}s") do
+          assert_difference "#{type}.count", 0 do
             Topic.import new_topics_with_invalid_chapter, all_or_none: true, recursive: true
           end
-        end
-      end
-      it "doesn't create chapters" do
-        assert_difference "Chapter.count", 0 do
-          Topic.import new_topics_with_invalid_chapter, all_or_none: true, recursive: true
         end
       end
     end

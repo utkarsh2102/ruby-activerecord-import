@@ -2,14 +2,19 @@ source 'https://rubygems.org'
 
 gemspec
 
+version = ENV['AR_VERSION'].to_f
+
+mysql2_version = '0.3.0'
+mysql2_version = '0.4.0' if version >= 4.2
+
 group :development, :test do
-  gem 'rubocop', '~> 0.38.0'
+  gem 'rubocop', '~> 0.40.0'
   gem 'rake'
 end
 
 # Database Adapters
 platforms :ruby do
-  gem "mysql2",                 "~> 0.3.0"
+  gem "mysql2",                 "~> #{mysql2_version}"
   gem "pg",                     "~> 0.9"
   gem "sqlite3",                "~> 1.3.10"
   gem "seamless_database_pool", "~> 1.0.20"
@@ -18,16 +23,16 @@ end
 platforms :jruby do
   gem "jdbc-mysql"
   gem "jdbc-postgres"
-  gem "activerecord-jdbcsqlite3-adapter"
-  gem "activerecord-jdbcmysql-adapter"
-  gem "activerecord-jdbcpostgresql-adapter"
+  gem "activerecord-jdbcsqlite3-adapter",    "~> 1.3"
+  gem "activerecord-jdbcmysql-adapter",      "~> 1.3"
+  gem "activerecord-jdbcpostgresql-adapter", "~> 1.3"
 end
 
 # Support libs
 gem "factory_girl", "~> 4.2.0"
 gem "timecop"
 gem "chronic"
-gem "mocha"
+gem "mocha", "~> 1.3.0"
 
 # Debugging
 platforms :jruby do
@@ -43,9 +48,7 @@ platforms :ruby do
   gem "rb-readline"
 end
 
-version = ENV['AR_VERSION'] || "4.2"
-
-if version >= "4.0"
+if version >= 4.0
   gem "minitest"
 else
   gem "test-unit"

@@ -1,7 +1,7 @@
 language: ruby
 cache: bundler
 rvm:
-  - 2.3.3
+  - 2.3.5
 
 env:
   global:
@@ -14,10 +14,11 @@ env:
     - AR_VERSION=4.2
     - AR_VERSION=5.0
     - AR_VERSION=5.1
+    - AR_VERSION=5.2
 
 matrix:
   include:
-    - rvm: jruby-9.1.7.0
+    - rvm: jruby-9.1.14.0
       env: AR_VERSION=4.2
       before_install:
         - gem update --system

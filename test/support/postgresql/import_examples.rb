@@ -24,6 +24,30 @@ def should_support_postgresql_import_functionality
       end
     end
 
+    context "setting attributes and marking clean" do
+      let(:topic) { Build(:topics) }
+
+      setup { Topic.import([topic]) }
+
+      it "assigns ids" do
+        assert topic.id.present?
+      end
+
+      it "marks models as clean" do
+        assert !topic.changed?
+      end
+
+      it "marks models as persisted" do
+        assert !topic.new_record?
+        assert topic.persisted?
+      end
+
+      it "assigns timestamps" do
+        assert topic.created_at.present?
+        assert topic.updated_at.present?
+      end
+    end
+
     describe "with query cache enabled" do
       setup do
         unless ActiveRecord::Base.connection.query_cache_enabled
@@ -59,6 +83,76 @@ def should_support_postgresql_import_functionality
 
       it "returns no ids" do
         assert_equal [], Book.import(books, no_returning: true).ids
+      end
+    end
+
+    describe "returning" do
+      let(:books) { [Book.new(author_name: "King", title: "It")] }
+      let(:result) { Book.import(books, returning: %w(author_name title)) }
+      let(:book_id) do
+        if RUBY_PLATFORM == 'java' || ENV['AR_VERSION'].to_i >= 5.0
+          books.first.id
+        else
+          books.first.id.to_s
+        end
+      end
+
+      it "creates records" do
+        assert_difference("Book.count", +1) { result }
+      end
+
+      it "returns ids" do
+        result
+        assert_equal [book_id], result.ids
+      end
+
+      it "returns specified columns" do
+        assert_equal [%w(King It)], result.results
+      end
+
+      context "when primary key and returning overlap" do
+        let(:result) { Book.import(books, returning: %w(id title)) }
+
+        setup { result }
+
+        it "returns ids" do
+          assert_equal [book_id], result.ids
+        end
+
+        it "returns specified columns" do
+          assert_equal [[book_id, 'It']], result.results
+        end
+      end
+
+      context "setting model attributes" do
+        let(:code) { 'abc' }
+        let(:discount) { 0.10 }
+        let(:original_promotion) do
+          Promotion.new(code: code, discount: discount)
+        end
+        let(:updated_promotion) do
+          Promotion.new(code: code, description: 'ABC discount')
+        end
+        let(:returning_columns) { %w(discount) }
+
+        setup do
+          Promotion.import([original_promotion])
+          Promotion.import([updated_promotion],
+            on_duplicate_key_update: { conflict_target: %i(code), columns: %i(description) },
+            returning: returning_columns)
+        end
+
+        it "sets model attributes" do
+          assert_equal updated_promotion.discount, discount
+        end
+
+        context "returning multiple columns" do
+          let(:returning_columns) { %w(discount description) }
+
+          it "sets model attributes" do
+            assert_equal updated_promotion.discount, discount
+          end
+        end
       end
     end
   end
@@ -135,6 +229,17 @@ def should_support_postgresql_import_functionality
       end
     end
   end
+
+  describe "with binary field" do
+    let(:binary_value) { "\xE0'c\xB2\xB0\xB3Bh\\\xC2M\xB1m\\I\xC4r".force_encoding('ASCII-8BIT') }
+    it "imports the correct values for binary fields" do
+      alarms = [Alarm.new(device_id: 1, alarm_type: 1, status: 1, secret_key: binary_value)]
+      assert_difference "Alarm.count", +1 do
+        Alarm.import alarms
+      end
+      assert_equal(binary_value, Alarm.first.secret_key)
+    end
+  end
 end
 
 def should_support_postgresql_upsert_functionality
@@ -202,6 +307,13 @@ def should_support_postgresql_upsert_functionality
           setup do
             Topic.import columns, values, validate: false
             @topic = Topic.find 99
+          end
+
+          it "should not modify the passed in :on_duplicate_key_update columns array" do
+            assert_nothing_raised do
+              columns = %w(title author_name).freeze
+              Topic.import columns, [%w(foo, bar)], on_duplicate_key_update: { columns: columns }
+            end
           end
 
           context "using string hash map" do
