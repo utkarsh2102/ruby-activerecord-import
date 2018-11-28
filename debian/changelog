@@ -1,3 +1,13 @@
+ruby-activerecord-import (0.24.0-2) experimental; urgency=medium
+
+  * debian/ruby-tests.rake: enable tests on rails 5.2 with sqlite3.
+  * Drop git in gemspec file.
+  * Adjust build-deps to allow test runs with rails 5 and sqlite.
+  * Upload to experimental as rails 5 currently only available in
+    experimental.
+
+ -- Andrew Lee (李健秋) <ajqlee@debian.org>  Wed, 28 Nov 2018 12:33:17 +0800
+
 ruby-activerecord-import (0.24.0-1) unstable; urgency=medium
 
   * Team upload
