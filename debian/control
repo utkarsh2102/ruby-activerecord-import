@@ -5,8 +5,18 @@ Maintainer: Debian Ruby Extras Maintainers <pkg-ruby-extras-maintainers@lists.al
 Uploaders: Pirate Praveen <praveen@debian.org>
 Build-Depends: debhelper (>= 11~),
                gem2deb,
-               ruby-activerecord (>= 3.0),
-               ruby-seamless-database-pool
+               rubocop,
+               ruby-activerecord,
+               ruby-chronic,
+               ruby-factory-girl,
+               ruby-mocha,
+               ruby-mysql2,
+               ruby-pg,
+               ruby-rspec-rails,
+               ruby-seamless-database-pool,
+               ruby-sqlite3,
+               ruby-timecop,
+               pry
 Standards-Version: 4.1.4
 Vcs-Git: https://salsa.debian.org/git/pkg-ruby-extras/ruby-activerecord-import.git
 Vcs-Browser: https://salsa.debian.org/cgit/pkg-ruby-extras/ruby-activerecord-import.git
