@@ -1,1 +1,2 @@
 relax-mysql-factory-girls.patch
+drop-git-in-gemspec.patch

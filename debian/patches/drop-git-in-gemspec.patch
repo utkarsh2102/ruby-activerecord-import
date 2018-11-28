@@ -1,0 +1,17 @@
+Description: Drop git in gemspec file
+Origin: Debian
+Forwarded: not-needed
+Reviewed-By: Andrew Lee (李健秋) <ajqlee@gmail.com>
+Last-Update: 2018-11-27
+
+--- ruby-activerecord-import-0.24.0.orig/activerecord-import.gemspec
++++ ruby-activerecord-import-0.24.0/activerecord-import.gemspec
+@@ -9,7 +9,7 @@ Gem::Specification.new do |gem|
+   gem.homepage      = "http://github.com/zdennis/activerecord-import"
+   gem.license       = "Ruby"
+ 
+-  gem.files         = `git ls-files`.split($\)
++  gem.files         = Dir.glob("**/*").select {|v| v !~ /^debian/}
+   gem.executables   = gem.files.grep(%r{^bin/}).map { |f| File.basename(f) }
+   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
+   gem.name          = "activerecord-import"
