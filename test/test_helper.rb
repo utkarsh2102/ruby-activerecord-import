@@ -33,6 +33,14 @@ rescue LoadError
   ENV["SKIP_COMPOSITE_PK"] = "true"
 end
 
+# Support MySQL 5.7
+if ActiveSupport::VERSION::STRING < "4.1"
+  require "active_record/connection_adapters/mysql2_adapter"
+  class ActiveRecord::ConnectionAdapters::Mysql2Adapter
+    NATIVE_DATABASE_TYPES[:primary_key] = "int(11) auto_increment PRIMARY KEY"
+  end
+end
+
 require "ruby-debug" if RUBY_VERSION.to_f < 1.9
 
 adapter = ENV["ARE_DB"] || "sqlite3"
@@ -50,7 +58,7 @@ ActiveSupport::Notifications.subscribe(/active_record.sql/) do |_, _, _, _, hsh|
   ActiveRecord::Base.logger.info hsh[:sql]
 end
 
-require "factory_girl"
+require "factory_bot"
 Dir[File.dirname(__FILE__) + "/support/**/*.rb"].each { |file| require file }
 
 # Load base/generic schema

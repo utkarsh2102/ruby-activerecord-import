@@ -24,27 +24,57 @@ module ActiveRecord::Import #:nodoc:
   end
 
   class Validator
-    def initialize(options = {})
+    def initialize(klass, options = {})
       @options = options
+      init_validations(klass)
+    end
+
+    def init_validations(klass)
+      @validate_callbacks = klass._validate_callbacks.dup
+
+      klass._validate_callbacks.each_with_index do |callback, i|
+        filter = callback.raw_filter
+
+        if filter.class.name =~ /Validations::PresenceValidator/
+          callback = callback.dup
+          filter = filter.dup
+          associations = klass.reflect_on_all_associations(:belongs_to)
+          attrs = filter.instance_variable_get(:@attributes).dup
+          associations.each do |assoc|
+            if (index = attrs.index(assoc.name))
+              key = assoc.foreign_key.to_sym
+              attrs[index] = key unless attrs.include?(key)
+            end
+          end
+          filter.instance_variable_set(:@attributes, attrs)
+          if @validate_callbacks.respond_to?(:chain, true)
+            @validate_callbacks.send(:chain).tap do |chain|
+              callback.instance_variable_set(:@filter, filter)
+              chain[i] = callback
+            end
+          else
+            callback.raw_filter = filter
+            callback.filter = callback.send(:_compile_filter, filter)
+            @validate_callbacks[i] = callback
+          end
+        elsif !@options[:validate_uniqueness] && filter.is_a?(ActiveRecord::Validations::UniquenessValidator)
+          @validate_callbacks.delete(callback)
+        end
+      end
     end
 
     def valid_model?(model)
       validation_context = @options[:validate_with_context]
       validation_context ||= (model.new_record? ? :create : :update)
-
       current_context = model.send(:validation_context)
+
       begin
         model.send(:validation_context=, validation_context)
         model.errors.clear
 
-        validate_callbacks = model._validate_callbacks.dup
-        model._validate_callbacks.each do |callback|
-          validate_callbacks.delete(callback) if callback.raw_filter.is_a? ActiveRecord::Validations::UniquenessValidator
-        end
-
         model.run_callbacks(:validation) do
           if defined?(ActiveSupport::Callbacks::Filters::Environment) # ActiveRecord >= 4.1
-            runner = validate_callbacks.compile
+            runner = @validate_callbacks.compile
             env = ActiveSupport::Callbacks::Filters::Environment.new(model, false, nil)
             if runner.respond_to?(:call) # ActiveRecord < 5.1
               runner.call(env)
@@ -63,10 +93,10 @@ module ActiveRecord::Import #:nodoc:
               runner.invoke_before(env)
               runner.invoke_after(env)
             end
-          elsif validate_callbacks.method(:compile).arity == 0 # ActiveRecord = 4.0
-            model.instance_eval validate_callbacks.compile
+          elsif @validate_callbacks.method(:compile).arity == 0 # ActiveRecord = 4.0
+            model.instance_eval @validate_callbacks.compile
           else # ActiveRecord 3.x
-            model.instance_eval validate_callbacks.compile(nil, model)
+            model.instance_eval @validate_callbacks.compile(nil, model)
           end
         end
 
@@ -95,7 +125,12 @@ class ActiveRecord::Associations::CollectionAssociation
 
     model_klass = reflection.klass
     symbolized_foreign_key = reflection.foreign_key.to_sym
-    symbolized_column_names = model_klass.column_names.map(&:to_sym)
+
+    symbolized_column_names = if model_klass.connection.respond_to?(:supports_virtual_columns?) && model_klass.connection.supports_virtual_columns?
+      model_klass.columns.reject(&:virtual?).map { |c| c.name.to_sym }
+    else
+      model_klass.column_names.map(&:to_sym)
+    end
 
     owner_primary_key = reflection.active_record_primary_key.to_sym
     owner_primary_key_value = owner.send(owner_primary_key)
@@ -287,8 +322,8 @@ class ActiveRecord::Base
     #   recursive import. For database adapters that normally support
     #   setting primary keys on imported objects, this option prevents
     #   that from occurring.
-    # * +on_duplicate_key_update+ - an Array or Hash, tells import to
-    #   use MySQL's ON DUPLICATE KEY UPDATE or Postgres 9.5+ ON CONFLICT
+    # * +on_duplicate_key_update+ - :all, an Array, or Hash, tells import to
+    #   use MySQL's ON DUPLICATE KEY UPDATE or Postgres/SQLite ON CONFLICT
     #   DO UPDATE ability. See On Duplicate Key Update below.
     # * +synchronize+ - an array of ActiveRecord instances for the model
     #   that you are currently importing data into. This synchronizes
@@ -347,7 +382,15 @@ class ActiveRecord::Base
     #
     # == On Duplicate Key Update (MySQL)
     #
-    # The :on_duplicate_key_update option can be either an Array or a Hash.
+    # The :on_duplicate_key_update option can be either :all, an Array, or a Hash.
+    #
+    # ==== Using :all
+    #
+    # The :on_duplicate_key_update option can be set to :all. All columns
+    # other than the primary key are updated. If a list of column names is
+    # supplied, only those columns will be updated. Below is an example:
+    #
+    #   BlogPost.import columns, values, on_duplicate_key_update: :all
     #
     # ==== Using an Array
     #
@@ -366,11 +409,19 @@ class ActiveRecord::Base
     #
     #   BlogPost.import columns, attributes, on_duplicate_key_update: { title: :title }
     #
-    # == On Duplicate Key Update (Postgres 9.5+)
+    # == On Duplicate Key Update (Postgres 9.5+ and SQLite 3.24+)
     #
-    # The :on_duplicate_key_update option can be an Array or a Hash with up to
+    # The :on_duplicate_key_update option can be :all, an Array, or a Hash with up to
     # three attributes, :conflict_target (and optionally :index_predicate) or
-    # :constraint_name, and :columns.
+    # :constraint_name (Postgres), and :columns.
+    #
+    # ==== Using :all
+    #
+    # The :on_duplicate_key_update option can be set to :all. All columns
+    # other than the primary key are updated. If a list of column names is
+    # supplied, only those columns will be updated. Below is an example:
+    #
+    #   BlogPost.import columns, values, on_duplicate_key_update: :all
     #
     # ==== Using an Array
     #
@@ -428,7 +479,15 @@ class ActiveRecord::Base
     #
     # ===== :columns
     #
-    # The :columns attribute can be either an Array or a Hash.
+    # The :columns attribute can be either :all, an Array, or a Hash.
+    #
+    # ===== Using :all
+    #
+    # The :columns attribute can be :all. All columns other than the primary key will be updated.
+    # If a list of column names is supplied, only those columns will be updated.
+    # Below is an example:
+    #
+    #   BlogPost.import columns, values, on_duplicate_key_update: { conflict_target: :slug, columns: :all }
     #
     # ===== Using an Array
     #
@@ -484,18 +543,8 @@ class ActiveRecord::Base
       options[:primary_key] = primary_key
       options[:locking_column] = locking_column if attribute_names.include?(locking_column)
 
-      # Don't modify incoming arguments
-      on_duplicate_key_update = options[:on_duplicate_key_update]
-      if on_duplicate_key_update && on_duplicate_key_update.duplicable?
-        options[:on_duplicate_key_update] = if on_duplicate_key_update.is_a?(Hash)
-          on_duplicate_key_update.each { |k, v| on_duplicate_key_update[k] = v.dup if v.duplicable? }
-        else
-          on_duplicate_key_update.dup
-        end
-      end
-
-      is_validating = options[:validate]
-      is_validating = true unless options[:validate_with_context].nil?
+      is_validating = options[:validate_with_context].present? ? true : options[:validate]
+      validator = ActiveRecord::Import::Validator.new(self, options)
 
       # assume array of model objects
       if args.last.is_a?( Array ) && args.last.first.is_a?(ActiveRecord::Base)
@@ -504,11 +553,19 @@ class ActiveRecord::Base
           column_names = args.first.dup
         else
           models = args.first
-          column_names = self.column_names.dup
+          column_names = if connection.respond_to?(:supports_virtual_columns?) && connection.supports_virtual_columns?
+            columns.reject(&:virtual?).map(&:name)
+          else
+            self.column_names.dup
+          end
         end
 
-        if models.first.id.nil? && column_names.include?(primary_key) && columns_hash[primary_key].type == :uuid
-          column_names.delete(primary_key)
+        if models.first.id.nil?
+          Array(primary_key).each do |c|
+            if column_names.include?(c) && columns_hash[c].type == :uuid
+              column_names.delete(c)
+            end
+          end
         end
 
         default_values = column_defaults
@@ -520,15 +577,34 @@ class ActiveRecord::Base
           serialized_attributes
         end
 
-        array_of_attributes = models.map do |model|
+        update_attrs = if record_timestamps && options[:timestamps]
+          if respond_to?(:timestamp_attributes_for_update, true)
+            send(:timestamp_attributes_for_update).map(&:to_sym)
+          else
+            new.send(:timestamp_attributes_for_update_in_model)
+          end
+        end
+
+        array_of_attributes = []
+
+        models.each do |model|
           if supports_setting_primary_key_of_imported_objects?
             load_association_ids(model)
           end
 
-          column_names.map do |name|
-            if stored_attrs.key?(name.to_sym) ||
-               serialized_attrs.key?(name) ||
-               default_values.key?(name.to_s)
+          if is_validating && !validator.valid_model?(model)
+            raise(ActiveRecord::RecordInvalid, model) if options[:raise_error]
+            next
+          end
+
+          array_of_attributes << column_names.map do |name|
+            if model.persisted? &&
+               update_attrs && update_attrs.include?(name.to_sym) &&
+               !model.send("#{name}_changed?")
+              nil
+            elsif stored_attrs.key?(name.to_sym) ||
+                  serialized_attrs.key?(name.to_s) ||
+                  default_values[name.to_s]
               model.read_attribute(name.to_s)
             else
               model.read_attribute_before_type_cast(name.to_s)
@@ -589,32 +665,65 @@ class ActiveRecord::Base
         array_of_attributes.each { |a| a.concat(new_fields) }
       end
 
+      # Don't modify incoming arguments
+      on_duplicate_key_update = options[:on_duplicate_key_update]
+      if on_duplicate_key_update
+        updatable_columns = symbolized_column_names.reject { |c| symbolized_primary_key.include? c }
+        options[:on_duplicate_key_update] = if on_duplicate_key_update.is_a?(Hash)
+          on_duplicate_key_update.each_with_object({}) do |(k, v), duped_options|
+            duped_options[k] = if k == :columns && v == :all
+              updatable_columns
+            elsif v.duplicable?
+              v.dup
+            else
+              v
+            end
+          end
+        elsif on_duplicate_key_update == :all
+          updatable_columns
+        elsif on_duplicate_key_update.duplicable?
+          on_duplicate_key_update.dup
+        else
+          on_duplicate_key_update
+        end
+      end
+
       timestamps = {}
 
       # record timestamps unless disabled in ActiveRecord::Base
-      if record_timestamps && options.delete( :timestamps )
+      if record_timestamps && options[:timestamps]
         timestamps = add_special_rails_stamps column_names, array_of_attributes, options
       end
 
       return_obj = if is_validating
-        if models
-          import_with_validations( column_names, array_of_attributes, options ) do |validator, failed|
-            models.each_with_index do |model, i|
-              next if validator.valid_model? model
+        import_with_validations( column_names, array_of_attributes, options ) do |failed_instances|
+          if models
+            models.each { |m| failed_instances << m if m.errors.any? }
+          else
+            # create instances for each of our column/value sets
+            arr = validations_array_for_column_names_and_attributes( column_names, array_of_attributes )
+
+            # keep track of the instance and the position it is currently at. if this fails
+            # validation we'll use the index to remove it from the array_of_attributes
+            arr.each_with_index do |hsh, i|
+              model = new
+              hsh.each_pair { |k, v| model[k] = v }
+              next if validator.valid_model?(model)
               raise(ActiveRecord::RecordInvalid, model) if options[:raise_error]
               array_of_attributes[i] = nil
-              failed << model
+              failure = model.dup
+              failure.errors.send(:initialize_dup, model.errors)
+              failed_instances << failure
             end
+            array_of_attributes.compact!
           end
-        else
-          import_with_validations( column_names, array_of_attributes, options )
         end
       else
         import_without_validations_or_callbacks( column_names, array_of_attributes, options )
       end
 
       if options[:synchronize]
-        sync_keys = options[:synchronize_keys] || [primary_key]
+        sync_keys = options[:synchronize_keys] || Array(primary_key)
         synchronize( options[:synchronize], sync_keys)
       end
       return_obj.num_inserts = 0 if return_obj.num_inserts.nil?
@@ -640,29 +749,7 @@ class ActiveRecord::Base
     def import_with_validations( column_names, array_of_attributes, options = {} )
       failed_instances = []
 
-      validator = ActiveRecord::Import::Validator.new(options)
-
-      if block_given?
-        yield validator, failed_instances
-      else
-        # create instances for each of our column/value sets
-        arr = validations_array_for_column_names_and_attributes( column_names, array_of_attributes )
-
-        # keep track of the instance and the position it is currently at. if this fails
-        # validation we'll use the index to remove it from the array_of_attributes
-        arr.each_with_index do |hsh, i|
-          model = new
-          hsh.each_pair { |k, v| model[k] = v }
-          next if validator.valid_model? model
-          raise(ActiveRecord::RecordInvalid, model) if options[:raise_error]
-          array_of_attributes[i] = nil
-          failure = model.dup
-          failure.errors.send(:initialize_dup, model.errors)
-          failed_instances << failure
-        end
-      end
-
-      array_of_attributes.compact!
+      yield failed_instances if block_given?
 
       result = if options[:all_or_none] && failed_instances.any?
         ActiveRecord::Import::Result.new([], 0, [], [])
@@ -861,7 +948,7 @@ class ActiveRecord::Base
           column = columns[j]
 
           # be sure to query sequence_name *last*, only if cheaper tests fail, because it's costly
-          if val.nil? && column.name == primary_key && !sequence_name.blank?
+          if val.nil? && Array(primary_key).first == column.name && !sequence_name.blank?
             connection_memo.next_value_for_sequence(sequence_name)
           elsif val.respond_to?(:to_sql)
             "(#{val.to_sql})"
@@ -910,7 +997,7 @@ class ActiveRecord::Base
           index = column_names.index(column) || column_names.index(column.to_sym)
           if index
             # replace every instance of the array of attributes with our value
-            array_of_attributes.each { |arr| arr[index] = timestamp if arr[index].nil? || action == :update }
+            array_of_attributes.each { |arr| arr[index] = timestamp if arr[index].nil? }
           else
             column_names << column
             array_of_attributes.each { |arr| arr << timestamp }
@@ -945,7 +1032,7 @@ Hash key mismatch.
 
 When importing an array of hashes with provided columns_names, each hash must contain keys for all column_names.
 
-Required keys: #{column_names}
+Required keys: #{required_keys}
 Missing keys: #{missing_keys}
 
 Hash: #{hash}
@@ -958,7 +1045,7 @@ When importing an array of hashes, all hashes must have the same keys.
 If you have records that are missing some values, we recommend you either set default values
 for the missing keys or group these records into batches by key set before importing.
 
-Required keys: #{column_names}
+Required keys: #{required_keys}
 Extra keys: #{extra_keys}
 Missing keys: #{missing_keys}
 
