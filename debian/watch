@@ -1,2 +1,2 @@
 version=3
-https://pkg-ruby-extras.alioth.debian.org/cgi-bin/gemwatch/activerecord-import .*/activerecord-import-(.*).tar.gz
+https://gemwatch.debian.net/activerecord-import .*/activerecord-import-(.*).tar.gz
