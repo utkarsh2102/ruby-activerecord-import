@@ -1,3 +1,15 @@
+ruby-activerecord-import (0.28.2-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream version 0.28.2
+  * Refresh patches
+  * Add patch for relaxing mysql2 version
+  * Move debian/watch to gemwatch.debian.net
+  * Use salsa.debian.org in Vcs-* fields
+  * Bump Standards-Version to 4.3.0 (no changes needed)
+
+ -- Utkarsh Gupta <guptautkarsh2102@gmail.com>  Wed, 30 Jan 2019 03:16:41 +0530
+
 ruby-activerecord-import (0.24.0-2) experimental; urgency=medium
 
   * debian/ruby-tests.rake: enable tests on rails 5.2 with sqlite3.
