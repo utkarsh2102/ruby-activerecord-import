@@ -1,3 +1,2 @@
-relax-mysql-factory-girls.patch
 drop-git-in-gemspec.patch
 relax-build-deps-for-tests.patch

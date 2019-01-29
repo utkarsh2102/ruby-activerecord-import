@@ -4,9 +4,9 @@ Forwarded: not-needed
 Reviewed-By: Andrew Lee (李健秋) <ajqlee@gmail.com>
 Last-Update: 2018-11-27
 
---- ruby-activerecord-import-0.24.0.orig/activerecord-import.gemspec
-+++ ruby-activerecord-import-0.24.0/activerecord-import.gemspec
-@@ -9,7 +9,7 @@ Gem::Specification.new do |gem|
+--- a/activerecord-import.gemspec
++++ b/activerecord-import.gemspec
+@@ -9,7 +9,7 @@
    gem.homepage      = "http://github.com/zdennis/activerecord-import"
    gem.license       = "Ruby"
  
