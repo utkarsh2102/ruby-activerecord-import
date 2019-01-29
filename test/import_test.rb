@@ -210,9 +210,9 @@ describe "#import" do
       end
 
       it "should ignore uniqueness validators" do
-        Topic.import columns, valid_values, validate: true
+        Topic.import columns, valid_values
         assert_difference "Topic.count", +2 do
-          Topic.import columns, valid_values, validate: true
+          Topic.import columns, valid_values
         end
       end
 
@@ -292,6 +292,36 @@ describe "#import" do
         assert_no_difference "Topic.count" do
           Topic.import columns, [["validate_failed", "Jerry Carter"]], validate: true
         end
+      end
+    end
+
+    context "with uniqueness validators included" do
+      it "should not import duplicate records" do
+        Topic.import columns, valid_values
+        assert_no_difference "Topic.count" do
+          Topic.import columns, valid_values, validate_uniqueness: true
+        end
+      end
+    end
+
+    context "when validatoring presence of belongs_to association" do
+      it "should not import records without foreign key" do
+        assert_no_difference "UserToken.count" do
+          UserToken.import [:token], [['12345abcdef67890']]
+        end
+      end
+
+      it "should import records with foreign key" do
+        assert_difference "UserToken.count", +1 do
+          UserToken.import [:user_name, :token], [%w("Bob", "12345abcdef67890")]
+        end
+      end
+
+      it "should not mutate the defined validations" do
+        UserToken.import [:user_name, :token], [%w("Bob", "12345abcdef67890")]
+        ut = UserToken.new
+        ut.valid?
+        assert_includes ut.errors.messages, :user
       end
     end
   end
@@ -490,11 +520,11 @@ describe "#import" do
 
     context "when the timestamps columns are present" do
       setup do
-        @existing_book = Book.create(title: "Fell", author_name: "Curry", publisher: "Bayer", created_at: 2.years.ago.utc, created_on: 2.years.ago.utc)
+        @existing_book = Book.create(title: "Fell", author_name: "Curry", publisher: "Bayer", created_at: 2.years.ago.utc, created_on: 2.years.ago.utc, updated_at: 2.years.ago.utc, updated_on: 2.years.ago.utc)
         ActiveRecord::Base.default_timezone = :utc
         Timecop.freeze(time) do
           assert_difference "Book.count", +2 do
-            Book.import %w(title author_name publisher created_at created_on), [["LDAP", "Big Bird", "Del Rey", nil, nil], [@existing_book.title, @existing_book.author_name, @existing_book.publisher, @existing_book.created_at, @existing_book.created_on]]
+            Book.import %w(title author_name publisher created_at created_on updated_at updated_on), [["LDAP", "Big Bird", "Del Rey", nil, nil, nil, nil], [@existing_book.title, @existing_book.author_name, @existing_book.publisher, @existing_book.created_at, @existing_book.created_on, @existing_book.updated_at, @existing_book.updated_on]]
           end
         end
         @new_book, @existing_book = Book.last 2
@@ -522,6 +552,23 @@ describe "#import" do
 
       it "should set the updated_on column for new records" do
         assert_in_delta time.to_i, @new_book.updated_on.to_i, 1.second
+      end
+
+      it "should not set the updated_at column for existing records" do
+        assert_equal 2.years.ago.utc.strftime("%Y:%d"), @existing_book.updated_at.strftime("%Y:%d")
+      end
+
+      it "should not set the updated_on column for existing records" do
+        assert_equal 2.years.ago.utc.strftime("%Y:%d"), @existing_book.updated_on.strftime("%Y:%d")
+      end
+
+      it "should not set the updated_at column on models if changed" do
+        timestamp = Time.now.utc
+        books = [
+          Book.new(author_name: "Foo", title: "Baz", created_at: timestamp, updated_at: timestamp)
+        ]
+        Book.import books
+        assert_equal timestamp.strftime("%Y:%d"), Book.last.updated_at.strftime("%Y:%d")
       end
     end
 
@@ -567,7 +614,7 @@ describe "#import" do
 
   context "importing through an association scope" do
     { has_many: :chapters, polymorphic: :discounts }.each do |association_type, association|
-      book   = FactoryGirl.create :book
+      book   = FactoryBot.create :book
       scope  = book.public_send association
       klass  = { chapters: Chapter, discounts: Discount }[association]
       column = { chapters: :title,  discounts: :amount  }[association]
@@ -609,7 +656,7 @@ describe "#import" do
 
   context "importing model with polymorphic belongs_to" do
     it "works without error" do
-      book     = FactoryGirl.create :book
+      book     = FactoryBot.create :book
       discount = Discount.new(discountable: book)
 
       Discount.import([discount])

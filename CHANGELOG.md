@@ -1,3 +1,65 @@
+## Changes in 0.28.2
+
+### Fixes
+
+* Fix issue where validations where not working in certain scenarios.
+  Thanks to @CASIXx1 via \#579.
+
+## Changes in 0.28.1
+
+### Fixes
+
+* Fix issue where ActiveRecord presence validations were being mutated.
+  Limited custom presence validation to bulk imports.
+
+## Changes in 0.28.0
+
+### New Features
+
+* Allow updated timestamps to be manually set.Thanks to @Rob117, @jkowens via \#570.
+
+### Fixes
+
+* Fix validating presence of belongs_to associations. Existence
+  of the parent record is not validated, but the foreign key field
+  cannot be empty. Thanks to @Rob117, @jkowens via \#575.
+
+## Changes in 0.27.0
+
+### New Features
+
+* Add "secret" option validate_uniqueness to enable uniqueness
+  validators when validating import. This is not a recommended
+  approach (See #228), but is being added back in for projects
+  that depended on this feature. Thanks to @jkowens via \#554.
+
+## Changes in 0.26.0
+
+### New Features
+
+* Add  on_duplicate_key_update for SQLite. Thanks to @jkowens via \#542.
+* Add option to update all fields on_duplicate_key_update. Thanks to @aimerald, @jkowens via \#543.
+
+### Fixes
+
+* Handle deeply frozen options hashes. Thanks to @jturkel via \#546.
+* Switch from FactoryGirl to FactoryBot. Thanks to @koic via \#547.
+* Allow import to work with ProxySQL. Thanks to @GregFarrell via \#550.
+
+## Changes in 0.25.0
+
+### New Features
+
+* Add support for makara_postgis adapter. Thanks to @chadwilken via \#527.
+* Skip validating presence of belongs_to associations. Thanks to @Sohair63, @naiyt, @jkowens via \#528.
+
+### Fixes
+
+* Add missing require for ActiveSupport.on_load. Thanks to @onk via \#529.
+* Support setting attribute values in before_validation callbacks.
+  Thanks to @SirRawlins, @jkowens via \#531.
+* Ignore virtual columns. Thanks to @dbourguignon, @jkowens via \#530.
+
 ## Changes in 0.24.0
 
 ### Fixes
