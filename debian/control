@@ -17,7 +17,7 @@ Build-Depends: debhelper (>= 11~),
                ruby-sqlite3,
                ruby-timecop,
                pry
-Standards-Version: 4.1.4
+Standards-Version: 4.3.0
 Vcs-Git: https://salsa.debian.org/ruby-team/ruby-activerecord-import.git
 Vcs-Browser: https://salsa.debian.org/ruby-team/ruby-activerecord-import
 Homepage: https://github.com/zdennis/activerecord-import
