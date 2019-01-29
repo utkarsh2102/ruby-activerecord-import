@@ -18,8 +18,8 @@ Build-Depends: debhelper (>= 11~),
                ruby-timecop,
                pry
 Standards-Version: 4.1.4
-Vcs-Git: https://salsa.debian.org/git/pkg-ruby-extras/ruby-activerecord-import.git
-Vcs-Browser: https://salsa.debian.org/cgit/pkg-ruby-extras/ruby-activerecord-import.git
+Vcs-Git: https://salsa.debian.org/ruby-team/ruby-activerecord-import.git
+Vcs-Browser: https://salsa.debian.org/ruby-team/ruby-activerecord-import
 Homepage: https://github.com/zdennis/activerecord-import
 Testsuite: autopkgtest-pkg-ruby
 XS-Ruby-Versions: all
