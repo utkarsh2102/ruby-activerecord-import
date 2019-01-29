@@ -1,4 +1,4 @@
-ruby-activerecord-import (0.28.2-1) unstable; urgency=medium
+ruby-activerecord-import (0.28.2-1) experimental; urgency=medium
 
   * Team upload
   * New upstream version 0.28.2
