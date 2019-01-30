@@ -29,6 +29,7 @@ Architecture: all
 XB-Ruby-Versions: ${ruby:Versions}
 Depends: ruby | ruby-interpreter,
          ruby-activerecord (>= 3.0),
+         bundler,
          ruby-seamless-database-pool,
          ${misc:Depends},
          ${shlibs:Depends}
