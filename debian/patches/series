@@ -1,3 +1,4 @@
 drop-git-in-gemspec.patch
 relax-build-deps-for-tests.patch
 relax-mysql2-version-for-tests.patch
+use-installed-libraries.patch

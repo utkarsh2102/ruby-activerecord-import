@@ -1,0 +1,14 @@
+Description: Use installed libraries.
+Author: Utkarsh Gupta <guptautkarsh2102@gmail.com>
+---
+
+--- ruby-activerecord-import-0.28.2.orig/activerecord-import.gemspec
++++ ruby-activerecord-import-0.28.2/activerecord-import.gemspec
+@@ -1,5 +1,6 @@
+ # -*- encoding: utf-8 -*-
+-require File.expand_path('../lib/activerecord-import/version', __FILE__)
++$:.unshift File.expand_path('../lib', __FILE__)
++require 'activerecord-import/version'
+ 
+ Gem::Specification.new do |gem|
+   gem.authors       = ["Zach Dennis"]
