@@ -5,7 +5,9 @@ Maintainer: Debian Ruby Extras Maintainers <pkg-ruby-extras-maintainers@lists.al
 Uploaders: Pirate Praveen <praveen@debian.org>
 Build-Depends: debhelper (>= 11~),
                gem2deb,
+               bundler,
                rubocop,
+               ruby-factory-bot,
                ruby-activerecord,
                ruby-chronic,
                ruby-factory-girl,
